@@ -58,7 +58,11 @@ COLOR = {"Semiconductors": "#58a6ff", "Infrastructure": "#39c5cf", "Power": "#d2
          "Application (Physical)": "#bc8cff", "Application (AI+)": "#f778ba", "AI Model": "#a5d6ff"}
 SHORT = {"Semiconductors": "半导体", "Infrastructure": "基础设施", "Power": "电力",
          "Application (Physical)": "应用·物理", "Application (AI+)": "应用·AI+", "AI Model": "模型"}
-BENCH = {"000300": "沪深300", "399006": "创业板指", "000688": "科创50", "000001": "上证指数"}
+BENCH = {"000300": "沪深300", "399006": "创业板指", "000688": "科创50", "000001": "上证指数",
+         "HSTECH": "恒生科技"}
+# 超额基准：沪深300 只是「A 股宽基 beta」参考，与这份名单的结构（688/300/002 占 44%、无银行地产）错配；
+# 所以另给两个同风格对照：创业板指（A 股成长）、恒生科技（港股 13 家的同市场对照）。
+STYLE_BENCH = {"A": "创业板指", "HK": "恒生科技"}
 
 
 # ------------------------------------------------------------------ 工具
@@ -313,12 +317,18 @@ def build():
     }
     if pd.isna(theme["w"]):
         theme["w"] = theme["median"]
-    # 基准
+    # 基准：K 线已按时点切过，优先用它；只有「当日自己那份腾讯快照」才覆盖
+    # （不能直接用 quote/ 里的值：回溯旧日时 quote 是往后的快照，会把沪深300 搞成一条常量线）
     bench = {}
-    if not quote.empty:
+    if not kline.empty:
+        for c, nm in BENCH.items():
+            sig = kline[kline.code == c].sort_values("date")
+            if len(sig) > 1:
+                bench[nm] = float((sig.close.iloc[-1] / sig.close.iloc[-2] - 1) * 100)
+    if quote_day == day and not quote.empty:
         qi = quote.set_index("code")
         for c, nm in BENCH.items():
-            if c in qi.index:
+            if c in qi.index and not pd.isna(qi.loc[c, "pct_chg"]):
                 bench[nm] = float(qi.loc[c, "pct_chg"])
     bench5, bench20 = {}, {}
     if not kline.empty:
@@ -328,6 +338,23 @@ def build():
                 bench5[nm] = float((sig.close.iloc[-1] / sig.close.iloc[-6] - 1) * 100)
             if len(sig) > 21:
                 bench20[nm] = float((sig.close.iloc[-1] / sig.close.iloc[-21] - 1) * 100)
+
+    # ---------------- 港股中位（含历史）：hk/kline.csv 打底，hk/<day>.csv 当日覆盖
+    hk_day_med = pd.Series(dtype=float)
+    if os.path.exists("hk/kline.csv"):
+        hkd = pd.read_csv("hk/kline.csv", encoding="utf-8-sig", dtype={"hk_code": str, "date": str})
+        hkd["day"] = hkd.date.str.replace("-", "", regex=False)
+        hkd = hkd[hkd.day <= day]
+        hk_day_med = hkd.groupby("day").pct.median().reindex(days)
+    for f in glob.glob("hk/*.csv"):                     # 当天快照是权威值，优先于日线重算
+        d = os.path.basename(f)[:8]
+        if d in days:
+            hb = pd.read_csv(f, encoding="utf-8-sig", dtype={"hk_code": str})
+            if "pct_chg" in hb and hb.pct_chg.notna().any():
+                hk_day_med[d] = float(hb.pct_chg.median())
+    hk_pct = panel[panel.market == "HK"].pct_chg.dropna()
+    theme_hk = {"n": int(len(hk_pct)), "median": float(hk_pct.median()) if len(hk_pct) else float("nan"),
+                "up": int((hk_pct > 0).sum()), "down": int((hk_pct < 0).sum())}
 
     # 温度打分（0–100）
     hist_amt = hist.groupby("day").amount_yi.sum().reindex(days)
@@ -481,6 +508,7 @@ def build():
                 eq_nav=eq_nav, eq_pct=eq_pct, m_med=m_med, bdf=bdf, cands=cands, moves=moves,
                 amt_ratio=amt_ratio, theme_amt_ratio=theme_amt_ratio, hi_n=hi_n,
                 boards=bdf, kline=kline, hist=hist, cons_day=cons_day, retro=retro,
+                theme_hk=theme_hk, hk_day_med=hk_day_med,
                 hk_cons_day=hk_cons_day, hk_hist_src=hk_hist_src)
 
 
@@ -992,17 +1020,33 @@ def main():
     days, bdf, cands, moves = D["days"], D["bdf"], D["cands"], D["moves"]
     bench = D["bench"]
     a_panel = panel[panel.market == "A"]
+    theme_hk = D.get("theme_hk", {})
 
     # ---- 一句话结论
     bench300 = bench.get("沪深300", float("nan"))
+    bench_c50 = bench.get(STYLE_BENCH["A"], float("nan"))
+    bench_hst = bench.get(STYLE_BENCH["HK"], float("nan"))
+    # 港股中位：优先用当日截面序列（hk/kline.csv 打底 + hk/<day>.csv 覆盖），历史页也有值
+    hk_series = D.get("hk_day_med")
+    hk_med = (float(hk_series.get(day)) if hk_series is not None and day in hk_series.index
+              and not pd.isna(hk_series.get(day)) else theme_hk.get("median", float("nan")))
+    hk_excess = hk_med - bench_hst if not (pd.isna(hk_med) or pd.isna(bench_hst)) else float("nan")
     excess = theme["median"] - bench300 if not pd.isna(bench300) else float("nan")
+    excess_c50 = theme["median"] - bench_c50 if not pd.isna(bench_c50) else float("nan")
     worst_layer = layer.med.idxmin() if not layer.empty else None
     best_layer = layer.med.idxmax() if not layer.empty else None
     bullets = []
     bullets.append(
         f"名单中位 <b>{theme['median']:+.2f}%</b>（等权 {theme['mean']:+.2f}%），"
-        f"沪深300 {bench300:+.2f}% → <b>超额 {excess:+.2f}pt</b>；"
-        f"{theme['up']} 涨 / {theme['down']} 跌，涨停 {theme['zt']} 家。")
+        f"沪深300 {bench300:+.2f}% → <b>超额 {excess:+.2f}pt</b>；创业板指 {bench_c50:+.2f}% → "
+        f"<b>{excess_c50:+.2f}pt</b>；{theme['up']} 涨 / {theme['down']} 跌，涨停 {theme['zt']} 家。")
+    if not pd.isna(hk_med):
+        who = (f"（{theme_hk['up']} 涨 / {theme_hk['down']} 跌）"
+               if theme_hk.get("n") else "")
+        bullets.append(
+            f"港股 13 家中位 <b>{hk_med:+.2f}%</b>{who}，"
+            f"恒生科技 {bench_hst:+.2f}% → <b>{hk_excess:+.2f}pt</b>；"
+            "港股没有流通盘数据与涨停概念，只和恒生科技比。")
     if not layer.empty:
         bullets.append(
             f"最弱 <b>{SHORT.get(worst_layer, worst_layer)}</b> {layer.loc[worst_layer, 'med']:+.2f}%，"
@@ -1018,7 +1062,7 @@ def main():
             f"20 日 {t20:+.2f}%（沪深300 {b20:+.2f}%，超额 {t20 - b20:+.2f}pt）"
             f"——短窗口在修复还是继续跑输，决定这波是回调还是趋势反转。")
     bullets.append(
-        f"量能：名单成交 <b>{theme['amount']:,.0f} 亿</b>，占全市场 {theme['amount'] / stats['amount'] * 100:.1f}%；"
+        f"量能：名单成交 <b>{theme['amount']:,.0f} 亿</b>，占 A 股全市场 {theme['amount'] / stats['amount'] * 100:.1f}%；"
         f"全市场 {stats['amount']:,.0f} 亿（20 日均 {D['amt_ratio'] * 100:.0f}%）。"
         f"全市场 {stats['up']} 涨 / {stats['down']} 跌，涨停 {stats['zt']}、跌停 {stats['dt']}。")
     if not bdf.empty:
@@ -1242,7 +1286,8 @@ def main():
 <h1>54 家名单当探针：主题今天几度、钱在哪个环节、名单还对不对</h1>
 <p class="sub">这 54 家不是组合，是<b>采样点</b>——用它读 AI 这条线在中国的温度、广度、轮动和与概念板块的背离。
 数据说明：A 股 41 家用通达信盘后包（收盘价、成交额、涨跌停），市值与 PE 用{quote_note}（{D['quote_day']}）；
-港股 13 家用腾讯（快照 + 前复权日线），前瞻 PE 用 Yahoo 卖方共识；基准用腾讯指数；成交额占比 = 名单成交额 / 全市场成交额。</p>
+港股 13 家用腾讯（快照 + 前复权日线），前瞻 PE 用 Yahoo 卖方共识；基准用腾讯指数（沪深300 / 创业板指 / 恒生科技）；
+成交额占比 = 名单（41 家 A 股）成交额 / A 股全市场成交额（<b>不含港股</b>）；超额基准的选法见第 7 节。</p>
 </header>
 {retro_warn}
 
@@ -1252,9 +1297,11 @@ def main():
 <div class="card"><div class="v">{theme['up']}/{theme['down']}</div><div class="k">涨 / 跌（{theme['n']} 家 A 股）</div>
 <div class="x">涨停 {theme['zt']} · P90−P10 {theme['spread']:.1f}pt</div></div>
 <div class="card"><div class="v">{theme['amount']:,.0f}<span style="font-size:13px;color:#8b949e"> 亿</span></div>
-<div class="k">名单成交额</div><div class="x">占全市场 {theme['amount'] / stats['amount'] * 100:.1f}%（全市场 {stats['amount']:,.0f} 亿）</div></div>
-<div class="card"><div class="v">{pct(theme['median'] - bench300, 2)}</div><div class="k">vs 沪深300</div>
-<div class="x">沪深300 {bench300:+.2f}% · 创业板 {bench.get('创业板指', float('nan')):+.2f}%</div></div>
+<div class="k">名单成交额（41 家 A 股）</div><div class="x">占 A 股全市场 {theme['amount'] / stats['amount'] * 100:.1f}%（全市场 A 股 {stats['amount']:,.0f} 亿，不含港股）</div></div>
+<div class="card"><div class="v">{pct(excess, 2)}</div><div class="k">超额 vs 沪深300 / 创业板指</div>
+<div class="x">沪深300 {bench300:+.2f}% → {pct(excess, 2)}　·　创业板指 {bench_c50:+.2f}% → {pct(excess_c50, 2)}</div></div>
+<div class="card"><div class="v">{pct(hk_med, 2)}</div><div class="k">港股 13 家中位（vs 恒生科技）</div>
+<div class="x">恒生科技 {bench_hst:+.2f}% → 超额 {pct(hk_excess, 2)}</div></div>
 <div class="card"><div class="v">{stats['up'] / stats['n'] * 100:.0f}%</div><div class="k">全市场上涨家数占比</div>
 <div class="x">涨停 {stats['zt']} / 跌停 {stats['dt']} · 中位 {stats['median']:+.2f}%</div></div>
 </div>
@@ -1328,7 +1375,12 @@ PEG 射线读法：<b>线下方 = 增速配得上估值，线上方 = 贵</b>；
 ③ 港股 13 家前瞻 PE 来自 Yahoo 卖方共识（覆盖 1–32 家机构，小票只有 1–4 家，参考度弱于 A 股的 20+ 家）；
 分层 PE 打点图里港股是空心点（口径相同、只标记市场），PEG 散点图暂不含港股——Yahoo 那份共识没有 FY1/FY2 明细，算不出增速；
 ④ 板块口径 = 77 个 AI 相关东财概念板块（data/em_cons.csv，12,729 条成分关系，含截断板块），板块中位是成分等权中位；
-⑤ 温度分数 = 中位涨跌 + 广度 + 量能 + 创新高家数的加权，0–100，仅用于横向比较，不是预测。</div>
+⑤ 温度分数 = 中位涨跌 + 广度 + 量能 + 创新高家数的加权，0–100，仅用于横向比较，不是预测。<br>
+<b>⑥ 基准口径：</b>名单中位 / 涨停 / 新高 / 成交额占比都是<b> 41 家 A 股</b>口径，分母也是 A 股全市场（不含港股）；
+沪深300 只是「A 股宽基 beta」参考——这份名单 44% 是科创板/创业板成长股、没有银行地产，
+跟沪深300 结构错配，超额长期会带风格偏移，所以另给<b>创业板指</b>（A 股成长）作为同风格对照。
+港股 13 家用<b>恒生科技</b>（腾讯、阿里、小米、联想、地平线等都是成分）做同市场对照；
+MSCI China 拿不到（腾讯行情不提供该指数），且它是全市场市值加权（含金融地产），换它并不解决错配。</div>
 <p class="note">积累：每跑一次 <code>python scripts/theme_data.py all</code> 就多一天盘后包与 K 线；
 动量窗口（5/10/{data_days - 1} 日）随积累自动变长。<br>
 生成命令：<code>python scripts/build_gs50_dashboard.py {day}</code>　·　数据：<code>data/mkt/</code>、<code>data/quote/</code>、<code>data/kline/</code></p>
@@ -1360,6 +1412,9 @@ PEG 射线读法：<b>线下方 = 增速配得上估值，线上方 = 贵</b>；
             "amount_share": _j(theme["amount"] / stats["amount"] * 100) if stats["amount"] else None,
             "amt_ratio": _j(D["amt_ratio"] * 100),
             "bench300": _j(bench300), "excess": _j(excess),
+            "bench_c50": _j(bench_c50), "excess_c50": _j(excess_c50),
+            "bench_hst": _j(bench_hst), "hk_median": _j(hk_med), "hk_excess": _j(hk_excess),
+            "hk_n": int(theme_hk.get("n", 0) or 0),
             "ret5": _j(t5), "ret20": _j(t20), "bench5": _j(b5), "bench20": _j(b20),
             "moves": len(moves), "n_boards": int(len(bdf)), "days": len(D["days"]),
             "hi": int(D["hi_n"]),

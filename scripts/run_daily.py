@@ -9,6 +9,7 @@
 
 流水线（每一步都是独立脚本，可以单独跑）：
     1 theme_data.py all <day>          盘后包 + 回补历史 + A 股快照 + 日线 + 港股
+    1b build_hk_kline.py <day>         港股 13 家日线收益长表（归档页的港股中位靠它，5 天内不重拉）
     2 fetch_consensus.py <day>         A 股卖方共识 → PE_NTM（tushare report_rc，逐股，慢）
     3 build_gs50_dashboard.py <day>    → docs/<day>.html（+ docs/data/<day>.json 摘要）
     4 build_archive.py                 → docs/archive.html（历史归档页）+ docs/index.html（跳最新）
@@ -20,6 +21,7 @@
     docs/gs50_dashboard.html 永远是最新一期（本地双击看，也兼容老链接）
     docs/data/<day>.json     归档页用的每日摘要（<1 KB）
 """
+
 import glob
 import os
 import shutil
@@ -94,6 +96,7 @@ def main():
                  ("回补历史", [td, "backfill", "30"])]
         if "--no-hk" not in flags:
             steps.append(("港股 13 家", [td, "hk", day]))
+            steps.append(("港股日线（归档用）", [os.path.join("scripts", "build_hk_kline.py"), day]))
         steps += [("A 股快照", [td, "quotes", day]),
                   ("A 股日线", [td, "kline"])]
         for i, (title, args) in enumerate(steps, 1):

@@ -14,8 +14,14 @@
  "mkt_amount": 20519.734,
  "amount_share": 9.0361,
  "amt_ratio": 100.0,
- "bench300": -1.03,
- "excess": -1.18,
+ "bench300": -0.2951,
+ "excess": -1.9149,
+ "bench_c50": -1.3159,
+ "excess_c50": -0.8941,
+ "bench_hst": -1.4933,
+ "hk_median": -1.52,
+ "hk_excess": -0.0267,
+ "hk_n": 0,
  "ret5": null,
  "ret20": null,
  "bench5": 1.3051,
@@ -33,5 +39,5 @@
   "应用·AI+": -0.25
  },
  "data_day": "20260901",
- "built": "2026-10-30 12:22"
+ "built": "2026-10-30 13:20"
 }

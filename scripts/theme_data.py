@@ -38,7 +38,8 @@ TDX_MIN_PRICED = {"sh": 10000, "sz": 3000, "bj": 50}
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 BENCH = {"sh000300": "沪深300", "sz399006": "创业板指", "sh000688": "科创50",
-         "sh000001": "上证指数", "sz399905": "中证500"}
+         "sh000001": "上证指数", "sz399905": "中证500",
+         "hkHSTECH": "恒生科技"}   # 港股 13 家的同市场对照
 
 
 # ----------------------------------------------------------------- 通达信盘后包
@@ -217,8 +218,8 @@ def backfill(n=30, start=None, jobs=4, max_calendar=100):
 
 # ----------------------------------------------------------------- 腾讯行情
 def _prefix(code):
-    if code[:2].lower() in ("sh", "sz", "bj"):
-        return code.lower()
+    if code[:2].lower() in ("sh", "sz", "bj", "hk"):   # hk 指数（hkHSTECH）后缀要大写，原样透传
+        return code
     if code in ("000001", "000300", "000688", "000905", "000016") or code.startswith(("5", "6", "9")):
         return "sh" + code if not code.startswith("92") else "bj" + code
     return "sz" + code
@@ -327,7 +328,7 @@ def refresh_kline(codes, count=260):
         keep = old[~old.code.isin(set(new.code))]
         new = pd.concat([keep, new], ignore_index=True)
     if not new.empty:
-        new = new[new.code.str.fullmatch(r"\d{6}")]
+        new = new[new.code.str.fullmatch(r"[0-9]{6}|[A-Z]{4,6}")]   # 除了 A 股 6 位码，还留 HSTECH 这类指数码
         new = new.sort_values(["code", "date"]).reset_index(drop=True)
         new.to_csv(path, index=False, encoding="utf-8-sig")
     print(f"K 线：{new.code.nunique() if not new.empty else 0} 只，失败 {len(fail)} {fail[:5]}")

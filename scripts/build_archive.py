@@ -5,6 +5,12 @@ docs/archive.html（温度/中位的迷你趋势 + 逐日表 + 到当日页面�
     python scripts/build_archive.py --docs DIR   # 指定 docs 目录
 
 页面完全静态：不 fetch、不联网，双击也能看。每新增一天重跑一次即可（run_daily.py 会自动跑）。
+
+口径（页面上也写了一遍，因为这里最容易读错）：
+    · 温度 / A 股中位 / 新高 / 成交额占比 = 41 家 A 股，分母是 A 股全市场，不含港股
+    · 港股中位 = 13 家港股，对照恒生科技（同市场）
+    · 沪深300 只是「A 股宽基 beta」参考；名单 44% 是科创板/创业板成长股，结构错配，
+      所以并列创业板指作为同风格对照
 """
 import glob
 import json
@@ -15,7 +21,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 UP, DOWN, FLAT = "#f85149", "#3fb950", "#8b949e"
-ACCENT, DIM = "#58a6ff", "#8b949e"
+ACCENT, DIM, PURPLE = "#58a6ff", "#8b949e", "#bc8cff"
 
 CSS = """
 :root{--bg:#0e1116;--panel:#161b22;--line:#232b36;--ink:#e6edf3;--dim:#8b949e;
@@ -47,6 +53,7 @@ td a:hover{color:#a5ceff;text-decoration:underline}
 .note{color:var(--dim);font-size:12.3px;margin:9px 0 0}
 .na{color:#4d5866}
 .scroll{overflow-x:auto}
+.scroll table{min-width:1120px}
 code{font-family:var(--mono);font-size:12.2px;background:#1c2430;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
 #tip{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .1s;
 background:#1b2230f5;border:1px solid #33414f;border-radius:7px;padding:6px 9px;color:#e6edf3;
@@ -112,7 +119,7 @@ def score_chart(rows, W=1120, H=210):
         return pad_t + ih * (1 - max(0.0, min(100.0, v)) / 100)
 
     parts = [f"<svg viewBox='0 0 {W} {H}' role='img'>"]
-    for v, lab, col in ((25, "冰点 25", "#3fb950"), (62, "常温 62", "#d29922"), (80, "过热 80", "#f85149")):
+    for v, col in ((25, "#3fb950"), (62, "#d29922"), (80, "#f85149")):
         parts.append(f"<line x1='{pad_l}' y1='{Y(v):.1f}' x2='{W - pad_r}' y2='{Y(v):.1f}' "
                      f"stroke='{col}33' stroke-dasharray='3 4'/>"
                      f"<text x='{pad_l - 8}' y='{Y(v) + 4:.1f}' fill='{DIM}' font-size='10' "
@@ -126,8 +133,7 @@ def score_chart(rows, W=1120, H=210):
         parts.append(
             f"<circle cx='{X(i):.1f}' cy='{Y(r['score']):.1f}' r='3.2' fill='{ACCENT}' "
             f"data-tip='{esc(dlabel(r['day']))}　温度 {r['score']:.0f} {esc(r.get('mood') or '')}"
-            f"&#10;名单中位 {r['median']:+.2f}%　{r.get('up')}/{r.get('down')} 涨跌'/>")
-    # x 轴：稀疏标签
+            f"&#10;A 股中位 {r['median']:+.2f}%　{r.get('up')}/{r.get('down')} 涨跌'/>")
     every = max(1, n // 8)
     for i, r in enumerate(rows):
         if i % every == 0 or i == n - 1:
@@ -137,15 +143,19 @@ def score_chart(rows, W=1120, H=210):
     return "".join(parts)
 
 
-def median_chart(rows, W=1120, H=200):
-    """每日名单中位涨跌柱（涨红跌绿），叠加沪深300 折线"""
+def bar_chart(rows, key, lines, tag, W=1120, H=210):
+    """某一侧（A 股 / 港股）的中位涨跌柱 + 基准折线。lines = [(json 字段, 颜色, 名字)]
+
+    图例固定放在左上角（不跟最后一点走，否则两条线收在同一个价位时文字会叠在一起）。
+    """
     n = len(rows)
     if n < 1:
         return ""
-    pad_l, pad_r, pad_t, pad_b = 44, 14, 14, 26
+    pad_l, pad_r, pad_t, pad_b = 44, 14, 30, 26
     iw, ih = W - pad_l - pad_r, H - pad_t - pad_b
-    vals = [r["median"] for r in rows if ok(r.get("median"))] + \
-           [r["bench300"] for r in rows if ok(r.get("bench300"))]
+    vals = [r[key] for r in rows if ok(r.get(key))]
+    for f, _, _ in lines:
+        vals += [r[f] for r in rows if ok(r.get(f))]
     span = max([abs(v) for v in vals] + [1.0]) * 1.15
     step = iw / max(n, 1)
     bw = max(2.0, min(18.0, step * 0.62))
@@ -159,27 +169,35 @@ def median_chart(rows, W=1120, H=200):
     parts = [f"<svg viewBox='0 0 {W} {H}' role='img'>",
              f"<line x1='{pad_l}' y1='{Y(0):.1f}' x2='{W - pad_r}' y2='{Y(0):.1f}' stroke='#232b36'/>",
              f"<text x='{pad_l - 8}' y='{Y(span):.1f}' fill='{DIM}' font-size='10' text-anchor='end' "
-             f"font-family='ui-monospace'>{span:.1f}</text>",
+             f"font-family='ui-monospace'>{span:.1f}%</text>",
              f"<text x='{pad_l - 8}' y='{Y(-span):.1f}' fill='{DIM}' font-size='10' text-anchor='end' "
-             f"font-family='ui-monospace'>-{span:.1f}</text>"]
+             f"font-family='ui-monospace'>-{span:.1f}%</text>"]
+    # 图例（左上角，横排）
+    lx = pad_l + 6
+    for f, col, nm in lines:
+        parts.append(f"<line x1='{lx}' y1='12' x2='{lx + 16}' y2='12' stroke='{col}' stroke-width='1.8' "
+                     f"stroke-dasharray='4 3'/>"
+                     f"<text x='{lx + 21}' y='16' fill='{col}' font-size='10.5' font-family='ui-monospace'>{esc(nm)}</text>")
+        lx += 34 + len(nm) * 10.5
     for i, r in enumerate(rows):
-        v = r.get("median")
+        v = r.get(key)
         if not ok(v):
             continue
         y0, y1 = Y(0), Y(v)
         col = UP if v > 0 else DOWN if v < 0 else FLAT
-        b = r.get("bench300")
-        tip = f"{esc(dlabel(r['day']))}　名单中位 {v:+.2f}%"
-        if ok(b):
-            tip += f"&#10;沪深300 {b:+.2f}%　超额 {v - b:+.2f}pt"
+        tip = f"{esc(dlabel(r['day']))}　{tag}中位 {v:+.2f}%"
+        for f, _, nm in lines:
+            if ok(r.get(f)):
+                tip += f"&#10;{nm} {r[f]:+.2f}%　超额 {v - r[f]:+.2f}pt"
         if ok(r.get("score")):
             tip += f"&#10;温度 {r['score']:.0f}　异动 {r.get('moves', '—')} 条"
         parts.append(f"<rect x='{X(i) - bw / 2:.1f}' y='{min(y0, y1):.1f}' width='{bw:.1f}' "
                      f"height='{abs(y1 - y0):.1f}' fill='{col}' opacity='.78' data-tip='{tip}'/>")
-    line = [(X(i), Y(r["bench300"])) for i, r in enumerate(rows) if ok(r.get("bench300"))]
-    if line:
-        parts.append("<polyline points='%s' fill='none' stroke='#8b949e' stroke-width='1.4' "
-                     "stroke-dasharray='4 3'/>" % " ".join(f"{a:.1f},{b:.1f}" for a, b in line))
+    for f, col, nm in lines:
+        pts = [(X(i), Y(r[f])) for i, r in enumerate(rows) if ok(r.get(f))]
+        if len(pts) > 1:
+            parts.append("<polyline points='%s' fill='none' stroke='%s' stroke-width='1.5' "
+                         "stroke-dasharray='4 3'/>" % (" ".join(f"{a:.1f},{b:.1f}" for a, b in pts), col))
     every = max(1, n // 8)
     for i, r in enumerate(rows):
         if i % every == 0 or i == n - 1:
@@ -212,12 +230,16 @@ def build(docs_dir):
     scores = [r["score"] for r in rows if ok(r.get("score"))]
     meds = [r["median"] for r in rows if ok(r.get("median"))]
     exc = [r["excess"] for r in rows if ok(r.get("excess"))]
+    exc_c50 = [r["excess_c50"] for r in rows if ok(r.get("excess_c50"))]
     win = sum(1 for r in rows if ok(r.get("excess")) and r["excess"] > 0)
+    win_c50 = sum(1 for r in rows if ok(r.get("excess_c50")) and r["excess_c50"] > 0)
     bench_n = sum(1 for r in rows if ok(r.get("excess")))
     nav = 1.0
     for m in meds:
         nav *= 1 + m / 100
     avg_exc = f"{sum(exc) / len(exc):+.2f}pt" if exc else "—"
+    avg_c50 = f"{sum(exc_c50) / len(exc_c50):+.2f}pt" if exc_c50 else "—"
+    hk_last = last.get("hk_median")
 
     trs = []
     for r in reversed(rows):
@@ -229,11 +251,13 @@ def build(docs_dir):
             f"{f'{sc:.0f}' if ok(sc) else '—'}</span></td>"
             f"<td style='text-align:right'>{pct(r.get('median'))}</td>"
             f"<td style='text-align:right'>{r.get('up', '—')}/{r.get('down', '—')}</td>"
-            f"<td style='text-align:right'>{r.get('zt', '—')}</td>"
             f"<td style='text-align:right'>{r.get('hi', '—')}</td>"
             f"<td style='text-align:right'>{num(r.get('amount'))}</td>"
             f"<td style='text-align:right'>{num(r.get('amount_share'), 1)}%</td>"
             f"<td style='text-align:right'>{pct(r.get('excess'))}</td>"
+            f"<td style='text-align:right'>{pct(r.get('excess_c50'))}</td>"
+            f"<td style='text-align:right'>{pct(r.get('hk_median'))}</td>"
+            f"<td style='text-align:right'>{pct(r.get('hk_excess'))}</td>"
             f"<td style='text-align:right'>{pct(r.get('ret5'))}</td>"
             f"<td style='text-align:right'>{pct(r.get('ret20'))}</td>"
             f"<td style='text-align:right'>{r.get('moves', '—')}</td></tr>")
@@ -246,7 +270,7 @@ def build(docs_dir):
 <div class="kicker">AI 主题每日复盘 · 历史归档　·　<a href="index.html">最新一期 →</a></div>
 <h1>{len(rows)} 期日报：温度、广度、超额，一天一行</h1>
 <p class="sub">每一行都是那一天生成的完整页面（<code>docs/YYYYMMDD.html</code>）——当时的结论、当时的图表，不会因为后面重跑而改变。
-下面两张小图只抽出三个数：<b>温度分</b>（0–100 加权分）、<b>名单中位涨跌</b>、<b>沪深300</b>，用来判断这波是升温还是降温。</p>
+下面三张图只抽出五个数：<b>温度分</b>（0–100 加权分）、<b>A 股中位涨跌</b>、<b>创业板指</b>、<b>港股中位</b>、<b>恒生科技</b>。</p>
 </header>
 
 <div class="cards">
@@ -254,35 +278,52 @@ def build(docs_dir):
 <div class="x">{dlabel(rows[0]['day'])} ~ {dlabel(last['day'])}</div></div>
 <div class="card"><div class="v">{f"{last['score']:.0f}" if ok(last.get('score')) else '—'}</div>
 <div class="k">最新温度 · {esc(last.get('mood') or '—')}</div>
-<div class="x">{dlabel(last['day'])}　中位 {f"{last['median']:+.2f}%" if ok(last.get('median')) else '—'}</div></div>
+<div class="x">{dlabel(last['day'])}　A 股中位 {f"{last['median']:+.2f}%" if ok(last.get('median')) else '—'}</div></div>
 <div class="card"><div class="v">{f"{sum(scores) / len(scores):.0f}" if scores else '—'}</div><div class="k">区间平均温度</div>
 <div class="x">{f"最低 {min(scores):.0f} · 最高 {max(scores):.0f}" if scores else '—'}</div></div>
-<div class="card"><div class="v">{f"{sum(meds) / len(meds):+.2f}%" if meds else '—'}</div><div class="k">区间日均中位涨跌</div>
+<div class="card"><div class="v">{f"{sum(meds) / len(meds):+.2f}%" if meds else '—'}</div><div class="k">区间日均 A 股中位</div>
 <div class="x">等权累乘 {nav:.2f}×（按日中位粗算，非净值）</div></div>
 <div class="card"><div class="v">{win}/{bench_n or '—'}</div><div class="k">跑赢沪深300 的天数</div>
-<div class="x">区间平均超额 {avg_exc}</div></div>
+<div class="x">创业板指 {win_c50}/{len(exc_c50) or '—'}　均值 300 {avg_exc} · 创50 {avg_c50}</div></div>
+<div class="card"><div class="v">{pct(hk_last, 2)}</div><div class="k">最新港股 13 家中位</div>
+<div class="x">恒生科技 {f"{last['bench_hst']:+.2f}%" if ok(last.get('bench_hst')) else '—'} → 超额 {pct(last.get('hk_excess'), 2)}</div></div>
 </div>
 
 <h2><span class="n">1</span>温度分（0–100）</h2>
 <div class="chart">{score_chart(rows)}</div>
-<p class="note">温度 = 中位涨跌 + 广度 + 量能 + 创新高家数的加权，只用于横向比较和历史对比，不是预测。
+<p class="note">温度 = A 股中位涨跌 + 广度 + 量能 + 创新高家数的加权，只用于横向比较和历史对比，不是预测。
 虚线是刻度：冰点 &lt;25 · 偏冷 &lt;45 · 常温 &lt;62 · 升温 &lt;80 · 过热 ≥80。</p>
 
-<h2><span class="n">2</span>名单中位涨跌 vs 沪深300</h2>
-<div class="chart">{median_chart(rows)}</div>
-<p class="note">柱 = 54 家名单当日中位涨跌（涨红跌绿），灰虚线 = 沪深300。柱子明显高过虚线的那几天，就是主题在跑赢。</p>
+<h2><span class="n">2</span>A 股：名单中位 vs 沪深300 / 创业板指</h2>
+<div class="chart">{bar_chart(rows, "median", [("bench300", DIM, "沪深300"), ("bench_c50", PURPLE, "创业板指")], "A 股")}</div>
+<p class="note">柱 = <b>41 家 A 股</b>当日中位涨跌（涨红跌绿）；灰虚线 = 沪深300，紫虚线 = 创业板指。
+为什么并列两条：这份名单 44% 是科创板/创业板成长股、没有银行地产，<b>跟沪深300 结构错配</b>——
+拿沪深300 算超额，长期会混进一大块风格差（成长 vs 价值），不是选股；创业板指才是同风格的对照。
+今天（{dlabel(last['day'])}）就是典型：A 股中位 {f"{last['median']:+.2f}%" if ok(last.get('median')) else '—'}、
+沪深300 {f"{last['bench300']:+.2f}%" if ok(last.get('bench300')) else '—'}（超额 {pct(last.get('excess'))}）、
+创业板指 {f"{last['bench_c50']:+.2f}%" if ok(last.get('bench_c50')) else '—'}（超额 {pct(last.get('excess_c50'))}）。</p>
 
-<h2><span class="n">3</span>逐日一览</h2>
+<h2><span class="n">3</span>港股：13 家中位 vs 恒生科技</h2>
+<div class="chart">{bar_chart(rows, "hk_median", [("bench_hst", DIM, "恒生科技")], "港股")}</div>
+<p class="note">柱 = <b>13 家港股</b>当日中位涨跌；灰虚线 = 恒生科技（腾讯、阿里、小米、联想、地平线都是其成分，
+是这份名单港股侧最贴的同市场对照）。港股中位来自 <code>data/hk/kline.csv</code>（tushare hk_daily 逐股补的历史），
+有当日快照 <code>hk/YYYYMMDD.csv</code> 时以快照为准。</p>
+
+<h2><span class="n">4</span>逐日一览</h2>
 <div class="scroll"><table><thead><tr><th>日期</th><th style="text-align:right">温度</th>
-<th style="text-align:right">名单中位</th><th style="text-align:right">涨/跌</th>
-<th style="text-align:right">涨停</th><th style="text-align:right">新高</th><th style="text-align:right">名单成交(亿)</th>
-<th style="text-align:right">占全市场</th><th style="text-align:right">超额</th>
+<th style="text-align:right">A 股中位</th><th style="text-align:right">涨/跌</th>
+<th style="text-align:right">新高</th><th style="text-align:right">成交(亿)</th>
+<th style="text-align:right">占 A 股市场</th><th style="text-align:right">超额300</th>
+<th style="text-align:right">超额创50</th><th style="text-align:right">港股中位</th>
+<th style="text-align:right">超额 HSTECH</th>
 <th style="text-align:right">5日</th><th style="text-align:right">20日</th>
 <th style="text-align:right">异动</th></tr></thead>
 <tbody>{''.join(trs)}</tbody></table></div>
-<p class="note">「超额」= 名单中位 − 沪深300；「5日 / 20日」是名单 A 股的窗口中位涨跌；
-「涨停 / 新高」是 41 家 A 股里涨停的家数、距 60 日高不到 1.5% 的家数；「异动」= 触发阈值的个股条数。
-点日期进入当天的完整页面（含温度计、广度、轮动、全表、估值）。</p>
+<p class="note"><b>市场口径：</b>「温度 / A 股中位 / 涨跌 / 新高 / 成交额 / 占 A 股市场」都是 <b>41 家 A 股</b>口径，
+分母是 A 股全市场（通达信盘后包），<b>不含港股</b>；「港股中位 / 超额 HSTECH」是 13 家港股口径。
+两边分开算，是因为港股没有涨停、没有流通盘数据，混在一起的中位会被两套制度搅乱。<br>
+「超额300 / 超额创50」= A 股中位 − 沪深300 / 创业板指；「超额 HSTECH」= 港股中位 − 恒生科技；
+「5日 / 20日」是名单 A 股的窗口中位涨跌；「异动」= 触发阈值的个股条数。点日期进入当天的完整页面。</p>
 
 <footer>AI 主题每日复盘 · 归档页生成于 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M}　·　
 {len(rows)} 期　·　重新生成：<code>python scripts/build_archive.py</code>　·　
