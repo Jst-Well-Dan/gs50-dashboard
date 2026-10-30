@@ -83,6 +83,13 @@ def num(v, digits=0, unit=""):
     return f"{v:,.{digits}f}{unit}"
 
 
+def mult(v):
+    """倍数：历史太短算不出量能倍数时显示 — 而不是 nan×"""
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return "<span class='na'>—</span>"
+    return f"{v:.2f}×"
+
+
 def heat_color(v, lo=-8, hi=8, mid=0):
     """收益 → 色深：涨红、跌绿（A 股习惯）"""
     if v is None or (isinstance(v, float) and math.isnan(v)):
@@ -1205,13 +1212,17 @@ def main():
 
     gauge_tip = (f"温度 {D['score']:.0f} / 100 · {D['mood']}\n"
                  f"名单中位 {theme['median']:+.2f}%　上涨 {theme['up']}/{theme['n']}\n"
-                 f"量能 {D['theme_amt_ratio']:.2f}×　新高 {D['hi_n']}/{n_a}\n"
+                 f"量能 {mult(D['theme_amt_ratio'])}　新高 {D['hi_n']}/{n_a}\n"
                  "刻度：冰点 <25 · 偏冷 <45 · 常温 <62 · 升温 <80 · 过热 ≥80")
     ntm_n = int(a_panel.pe_ntm.notna().sum())
     ntm_hk = int(panel[panel.market == "HK"].pe_ntm.notna().sum())
     data_days = len(days)
     last_q = panel[panel.market == "HK"]
     retro_warn = ""
+    quote_note = "最早一份快照（回溯补算）" if D.get("retro") else "不晚于数据日的最近一份快照"
+    prev_amt = stats.get("amount_prev")
+    chg_amt = ("<span class='na'>—</span>" if prev_amt is None or pd.isna(prev_amt) or not prev_amt
+               else f"{stats['amount'] / prev_amt - 1:+.1%}")
     if D.get("retro"):
         retro_warn = (
             "<div class='warn'><b>回溯归档页：</b>这一页是事后补生成的。"
@@ -1230,7 +1241,7 @@ def main():
 <div class="kicker">AI 主题每日复盘 · {day}　（{data_days} 个交易日的盘后包，20 日动量可用）　·　<a href="archive.html">全部日期</a>　·　<a href="index.html">最新</a></div>
 <h1>54 家名单当探针：主题今天几度、钱在哪个环节、名单还对不对</h1>
 <p class="sub">这 54 家不是组合，是<b>采样点</b>——用它读 AI 这条线在中国的温度、广度、轮动和与概念板块的背离。
-数据说明：A 股 41 家用通达信盘后包（收盘价、成交额、涨跌停），市值与 PE 用不晚于数据日的最近一份快照（{D['quote_day']}）；
+数据说明：A 股 41 家用通达信盘后包（收盘价、成交额、涨跌停），市值与 PE 用{quote_note}（{D['quote_day']}）；
 港股 13 家用腾讯（快照 + 前复权日线），前瞻 PE 用 Yahoo 卖方共识；基准用腾讯指数；成交额占比 = 名单成交额 / 全市场成交额。</p>
 </header>
 {retro_warn}
@@ -1255,8 +1266,8 @@ def main():
 <div class="v" style="font-size:17px">{theme['median']:+.2f}% <span style="color:#8b949e">/</span>
 {pct(a_panel.ret5.median(), 1)} <span style="color:#8b949e">/</span> {pct(a_panel.ret20.median(), 1)}</div></div>
 <div class="card"><div class="k">量能倍数（名单 / 均值）</div>
-<div class="v" style="font-size:17px">{D['theme_amt_ratio']:.2f}×</div>
-<div class="x">全市场 {stats['amount']:,.0f} 亿（{D['amt_ratio']:.2f}×，环比 {stats['amount'] / stats['amount_prev'] - 1:+.1%}）</div></div>
+<div class="v" style="font-size:17px">{mult(D['theme_amt_ratio'])}</div>
+<div class="x">全市场 {stats['amount']:,.0f} 亿（{mult(D['amt_ratio'])}，环比 {chg_amt}）</div></div>
 <div class="card"><div class="k">创新高家数（距 60 日高 &lt;1.5%）</div>
 <div class="v" style="font-size:17px">{D['hi_n']} / {n_a}</div><div class="x">名单 A 股口径</div></div>
 <div class="card"><div class="k">分位差 P90−P10（分化度）</div>
@@ -1351,6 +1362,7 @@ PEG 射线读法：<b>线下方 = 增速配得上估值，线上方 = 贵</b>；
             "bench300": _j(bench300), "excess": _j(excess),
             "ret5": _j(t5), "ret20": _j(t20), "bench5": _j(b5), "bench20": _j(b20),
             "moves": len(moves), "n_boards": int(len(bdf)), "days": len(D["days"]),
+            "hi": int(D["hi_n"]),
             "ntm_a": int(a_panel.pe_ntm.notna().sum()),
             "layers": {SHORT.get(l, l): _j(r.med) for l, r in layer.iterrows()},
             "data_day": day, "built": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),

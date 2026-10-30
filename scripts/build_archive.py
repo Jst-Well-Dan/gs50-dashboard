@@ -230,6 +230,7 @@ def build(docs_dir):
             f"<td style='text-align:right'>{pct(r.get('median'))}</td>"
             f"<td style='text-align:right'>{r.get('up', '—')}/{r.get('down', '—')}</td>"
             f"<td style='text-align:right'>{r.get('zt', '—')}</td>"
+            f"<td style='text-align:right'>{r.get('hi', '—')}</td>"
             f"<td style='text-align:right'>{num(r.get('amount'))}</td>"
             f"<td style='text-align:right'>{num(r.get('amount_share'), 1)}%</td>"
             f"<td style='text-align:right'>{pct(r.get('excess'))}</td>"
@@ -274,12 +275,13 @@ def build(docs_dir):
 <h2><span class="n">3</span>逐日一览</h2>
 <div class="scroll"><table><thead><tr><th>日期</th><th style="text-align:right">温度</th>
 <th style="text-align:right">名单中位</th><th style="text-align:right">涨/跌</th>
-<th style="text-align:right">涨停</th><th style="text-align:right">名单成交(亿)</th>
+<th style="text-align:right">涨停</th><th style="text-align:right">新高</th><th style="text-align:right">名单成交(亿)</th>
 <th style="text-align:right">占全市场</th><th style="text-align:right">超额</th>
 <th style="text-align:right">5日</th><th style="text-align:right">20日</th>
 <th style="text-align:right">异动</th></tr></thead>
 <tbody>{''.join(trs)}</tbody></table></div>
-<p class="note">「超额」= 名单中位 − 沪深300；「5日 / 20日」是名单 A 股的窗口中位涨跌；「异动」= 触发阈值的个股条数。
+<p class="note">「超额」= 名单中位 − 沪深300；「5日 / 20日」是名单 A 股的窗口中位涨跌；
+「涨停 / 新高」是 41 家 A 股里涨停的家数、距 60 日高不到 1.5% 的家数；「异动」= 触发阈值的个股条数。
 点日期进入当天的完整页面（含温度计、广度、轮动、全表、估值）。</p>
 
 <footer>AI 主题每日复盘 · 归档页生成于 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M}　·　
