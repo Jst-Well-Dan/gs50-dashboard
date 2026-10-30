@@ -1,0 +1,16 @@
+# 密钥：tushare token，绝对不能进仓库
+.env
+
+# 中间缓存
+.cache/
+__pycache__/
+*.pyc
+
+# 日频原始数据：体积大（mkt 单日 ~600 KB），不入库。
+# 页面里已经把当时的结论和图表固化成 docs/YYYYMMDD.html，历史照样能看；
+# data/ 下的静态基线（gs50.csv / em_cons.csv / em_board_stats.csv）仍然入库。
+data/mkt/
+data/quote/
+data/kline/
+data/consensus/
+data/hk/
