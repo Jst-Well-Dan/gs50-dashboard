@@ -65,9 +65,10 @@ footer a:hover,.kicker a:hover{color:#a5ceff}
 <h1>54 家名单当探针：主题今天几度、钱在哪个环节、名单还对不对</h1>
 <p class="sub">这 54 家不是组合，是<b>采样点</b>——用它读 AI 这条线在中国的温度、广度、轮动和与概念板块的背离。
 数据说明：A 股 41 家用通达信盘后包（收盘价、成交额、涨跌停），市值与 PE 用最早一份快照（回溯补算）（20261029）；
-港股 13 家用腾讯（快照 + 前复权日线），前瞻 PE 用 Yahoo 卖方共识；基准用腾讯指数；成交额占比 = 名单成交额 / 全市场成交额。</p>
+港股 13 家用腾讯（快照 + 前复权日线），前瞻 PE 用 Yahoo 卖方共识；基准用腾讯指数（沪深300 / 创业板指 / 恒生科技）；
+成交额占比 = 名单（41 家 A 股）成交额 / A 股全市场成交额（<b>不含港股</b>）；超额基准的选法见第 7 节。</p>
 </header>
-<div class='warn'><b>回溯归档页：</b>这一页是事后补生成的。行情、成交额、涨跌停、5/20 日动量、60 日高、量能倍数都只用到 20260928 及之前的数据（不含未来）；但 20260928 当时没有腾讯快照，市值 / PE / 换手退回 20261029 的快照，所以第 6 节（估值）只看结构、别比数值。完整口径的历史页从有当日快照的那天开始。</div><div class='warn'><b>港股缺失：</b>20260928 没有港股快照（<code>data/hk/20260928.csv</code>），本页港股 13 家的价格 / 动量 / PE 均为空，名单中位只算 A 股。</div>
+<div class='warn'><b>回溯归档页：</b>这一页是事后补生成的。行情、成交额、涨跌停、5/20 日动量、60 日高、量能倍数都只用到 20260928 及之前的数据（不含未来）；但 20260928 当时没有腾讯快照，市值 / PE / 换手退回 20261029 的快照，所以第 6 节（估值）只看结构、别比数值。完整口径的历史页从有当日快照的那天开始。</div><div class='warn'><b>港股快照缺失：</b>20260928 没有 <code>data/hk/20260928.csv</code>，本页全表里港股 13 家的价格 / 动量 / PE 为空，所以估值、全表两节只看 A 股；涨跌中位仍可由 <code>data/hk/kline.csv</code> 还原，见顶部卡片。（历史日只有 <code>hk/kline.csv</code> 的日收益，市值与 PE 无快照不可回补。）</div>
 
 <div class="cards">
 <div class="card"><div class="v" style="color:#3fb950">-4.35%</div>
@@ -269,7 +270,7 @@ MSCI China 拿不到（腾讯行情不提供该指数），且它是全市场市
 <p class="note">积累：每跑一次 <code>python scripts/theme_data.py all</code> 就多一天盘后包与 K 线；
 动量窗口（5/10/18 日）随积累自动变长。<br>
 生成命令：<code>python scripts/build_gs50_dashboard.py 20260928</code>　·　数据：<code>data/mkt/</code>、<code>data/quote/</code>、<code>data/kline/</code></p>
-<footer>AI 主题每日复盘 · 生成于 2026-10-30 13:22 · 数据日 20260928　·　<a href="archive.html">历史归档</a>　·　<a href="index.html">最新一期</a></footer>
+<footer>AI 主题每日复盘 · 生成于 2026-10-30 13:29 · 数据日 20260928　·　<a href="archive.html">历史归档</a>　·　<a href="index.html">最新一期</a></footer>
 </div>
 <div id="tip"></div>
 <script>

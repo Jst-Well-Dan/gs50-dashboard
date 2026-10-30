@@ -1275,8 +1275,10 @@ def main():
             "所以第 6 节（估值）只看结构、别比数值。完整口径的历史页从有当日快照的那天开始。</div>")
     if D.get("hk_cons_day") == "—" and panel[panel.market == "HK"].close.isna().all():
         retro_warn += (
-            f"<div class='warn'><b>港股缺失：</b>{day} 没有港股快照（<code>data/hk/{day}.csv</code>），"
-            "本页港股 13 家的价格 / 动量 / PE 均为空，名单中位只算 A 股。</div>")
+            f"<div class='warn'><b>港股快照缺失：</b>{day} 没有 <code>data/hk/{day}.csv</code>，"
+            "本页全表里港股 13 家的价格 / 动量 / PE 为空，所以估值、全表两节只看 A 股；"
+            "涨跌中位仍可由 <code>data/hk/kline.csv</code> 还原，见顶部卡片。"
+            "（历史日只有 <code>hk/kline.csv</code> 的日收益，市值与 PE 无快照不可回补。）</div>")
 
     html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1422,7 +1424,7 @@ MSCI China 拿不到（腾讯行情不提供该指数），且它是全市场市
             "layers": {SHORT.get(l, l): _j(r.med) for l, r in layer.iterrows()},
             "data_day": day, "built": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
         }
-        with open(SUMMARY_PATH, "w", encoding="utf-8") as fh:
+        with open(SUMMARY_PATH, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(payload, fh, ensure_ascii=False, indent=1, allow_nan=False)
         print(f"写出 {SUMMARY_PATH}")
 
