@@ -6,6 +6,7 @@
     python scripts/run_daily.py --no-consensus   # 跳过 A 股卖方共识（慢，最多几分钟；页面复用最近一版）
     python scripts/run_daily.py --no-hk          # 跳过港股（港股休市或想快一点）
     python scripts/run_daily.py --no-backfill    # 不补历史日（只出今天这一页 + 归档）
+    python scripts/run_daily.py --require-today  # 今天没盘后包就退出（云端 cron 用，别拿今天的快照重出昨天的页）
 
 流水线（每一步都是独立脚本，可以单独跑）：
     1 theme_data.py all <day>          盘后包 + 回补历史 + A 股快照 + 日线 + 港股
@@ -96,6 +97,14 @@ def main():
         td = os.path.join("scripts", "theme_data.py")
         steps = [("盘后包", [td, "pkg", day]),
                  ("回补历史", [td, "backfill", "30"])]
+        # --require-today（云端定时任务用）：今天没有盘后包就直接退出，
+        # 否则会用今天的快照去重出上一个交易日的页面（港股/基准会错位一天）
+        if "--require-today" in flags:
+            run(f"1/4 抓数 · 盘后包（{day}）", [td, "pkg", day])
+            if not os.path.exists(os.path.join(ROOT, "data", "mkt", f"{day}.csv")):
+                print(f"=== {day} 没有盘后包（非交易日或还没发布）→ 跳过本次运行 ===", flush=True)
+                return
+            steps = steps[1:]
         if "--no-hk" not in flags:
             steps.append(("港股 13 家", [td, "hk", day]))
             steps.append(("港股日线（归档用）", [os.path.join("scripts", "build_hk_kline.py"), day]))

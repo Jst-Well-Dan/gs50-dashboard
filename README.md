@@ -4,7 +4,7 @@ GS 三张 AI 表去重出的 **54 家**（A 41 / HK 13）当「探针」，每�
 温度、广度、轮动与背离，出一张离线的单文件 HTML，并按日归档。
 
 - 产出：`docs/YYYYMMDD.html`（每日一份，永不覆盖）+ `docs/index.html`（首页门厅：最新一期结论 + 入口）+ `docs/archive.html`（历史归档页）
-- 部署：`docs/` 直接当 GitHub Pages 的源目录，`deploy.bat` 一键 commit + push
+- 部署：`docs/` 直接当 GitHub Pages 的源目录，`deploy.bat` 一键 commit + push；云端则由 GitHub Actions 每个交易日自动跑并发布
 - 输入：`data/` 下的日频快照与历史（本地 CSV，可追溯、可重算）
 - 这不是组合，没有权重和归因；54 家是采样点，不是持仓。
 
@@ -49,11 +49,27 @@ python -m http.server 8000 --directory docs
 
 ## 部署到 GitHub Pages
 
+**线上：<https://jst-well-dan.github.io/gs50-dashboard/>**（仓库 <https://github.com/Jst-Well-Dan/gs50-dashboard>，public）
+
 Pages 的源目录就是 `docs/`，不用改任何构建配置：
 
-1. 仓库：`git init -b main` → `git remote add origin https://github.com/<你>/<仓库>.git`
-2. Settings → Pages → Source: *Deploy from a branch* → `main` / `/docs`
-3. 每天跑完 `python scripts/run_daily.py`，再双击 `deploy.bat`（commit + push）
+1. Settings → Pages → Source: *Deploy from a branch* → `main` / `/docs`
+2. 每天跑完 `python scripts/run_daily.py`，再双击 `deploy.bat`（commit + push）→ Pages 自动重建
+3. 或者根本不用管本机：见下面「云端每天自动跑」
+
+### 云端每天自动跑（GitHub Actions）
+
+`.github/workflows/daily.yml`：每个交易日 **17:30 北京时间**跑一遍完整流水线（19:30 再补跑一次，
+盘后包发得晚也不会漏），出完页面直接把 `docs/` 提交回 `main`，Pages 随之自动发布。
+
+- 需要 `TUSHARE_KEY` secret：`gh secret set TUSHARE_KEY`（值就是 `.env` 里的 tushare_key）
+- 手动触发：`gh workflow run daily`，或 Actions 页面点 *Run workflow*（可指定 `day=YYYYMMDD`）
+- `data/` 与 `.cache/` 不入库，靠 Actions cache 在多次运行间接力，不必每次重新回补历史
+- 非交易日 / 盘后包还没发布：`--require-today` 让整次运行 1 秒内干净退出，**不会**拿今天的快照去重出昨天的页面
+- 云端跑完是新的 commit；本机 `git pull` 就能对齐（页面内容一致，`data/` 各在各的）
+
+实测（2026-10-31）：通达信盘后包、腾讯行情/K 线、tushare 代理在 GitHub runner 上均可达，
+整轮流水线约 20 分钟（大头是 41 家 A 股共识 + 13 家港股日线）。
 
 线上路径：`/` → 首页门厅（最新一期的结论 + 读数 + 趋势 + 入口），`/<YYYYMMDD>.html` → 某一天，
 `/archive.html` → 全部日期。三个 URL 三个角色，没有别名：**页内永远能跳回首页，也永远能往前后一天走**

@@ -109,7 +109,7 @@ def _limit_pct(code, name):
 def _download(url, out_path, max_time=180):
     """用 curl 下载（python urllib 对这台机器的 tdx 站点会卡在 TLS / 502，curl 稳定）。
     返回 HTTP 状态码。"""
-    cmd = ["curl", "-sS", "-o", out_path, "-w", "%{http_code}", "--max-time", str(max_time),
+    cmd = ["curl", "-sS", "-L", "-o", out_path, "-w", "%{http_code}", "--max-time", str(max_time),
            "-A", UA, url]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
