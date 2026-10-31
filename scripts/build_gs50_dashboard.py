@@ -1276,6 +1276,7 @@ main{min-width:0;max-width:1118px}
 header.page{padding:0 0 16px;margin-bottom:16px;border-bottom:1px solid var(--line)}
 h1{font-size:29px;line-height:1.32;margin:0 0 7px;letter-spacing:-.022em;font-weight:650;text-wrap:balance}
 h1 .dim{color:var(--dim);font-weight:500}
+h1 .u{font-style:normal;font-size:.42em;font-weight:500;color:var(--dim);margin-left:.1em;letter-spacing:.02em}
 .standfirst{margin:0;color:var(--dim);font-size:13.8px;max-width:76ch}
 h2{font-size:17px;margin:40px 0 9px;display:flex;align-items:baseline;gap:9px;letter-spacing:-.01em;
   scroll-margin-top:calc(var(--bar) + 18px)}
@@ -1833,7 +1834,7 @@ def main():
 <main>
 <header class="page">
 <p class="date-line">数据日 {day_iso}　·　第 {pos} / {total} 期</p>
-<h1>{D['mood']} {D['score']:.0f} <span class="dim">·</span> {head_tail}</h1>
+<h1>{D['mood']} {D['score']:.0f}<i class="u">分</i> <span class="dim">·</span> {head_tail}</h1>
 <p class="standfirst">54 家名单当探针：读 AI 这条线的温度、广度、轮动与背离。不是组合，没有权重。</p>
 </header>
 {retro_warn}
