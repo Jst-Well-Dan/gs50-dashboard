@@ -3,7 +3,7 @@
 GS 三张 AI 表去重出的 **54 家**（A 41 / HK 13）当「探针」，每天读一遍 AI 这条线在中国的
 温度、广度、轮动与背离，出一张离线的单文件 HTML，并按日归档。
 
-- 产出：`docs/YYYYMMDD.html`（每日一份，永不覆盖）+ `docs/index.html`（跳最新）+ `docs/archive.html`（历史归档页）
+- 产出：`docs/YYYYMMDD.html`（每日一份，永不覆盖）+ `docs/index.html`（首页门厅：最新一期结论 + 入口）+ `docs/archive.html`（历史归档页）
 - 部署：`docs/` 直接当 GitHub Pages 的源目录，`deploy.bat` 一键 commit + push
 - 输入：`data/` 下的日频快照与历史（本地 CSV，可追溯、可重算）
 - 这不是组合，没有权重和归因；54 家是采样点，不是持仓。
@@ -45,6 +45,7 @@ python -m http.server 8000 --directory docs
   页面顶部会挂「回溯归档页」提示，那一页只看估值结构、别比数值。
 - 缺页自愈：
   `run_daily.py` 每次会检查 `docs/<day>.html` 是否齐全，缺的就补（首次部署 36 天约 3 分钟）。
+  改了页面模板要统一刷一遍旧日期页：`python scripts/run_daily.py --rebuild --all`（约 7 分钟）。
 
 ## 部署到 GitHub Pages
 
@@ -54,7 +55,9 @@ Pages 的源目录就是 `docs/`，不用改任何构建配置：
 2. Settings → Pages → Source: *Deploy from a branch* → `main` / `/docs`
 3. 每天跑完 `python scripts/run_daily.py`，再双击 `deploy.bat`（commit + push）
 
-线上路径：`/` → 最新一期，`/archive.html` → 归档，`/<YYYYMMDD>.html` → 某一天。
+线上路径：`/` → 首页门厅（最新一期的结论 + 读数 + 趋势 + 入口），`/<YYYYMMDD>.html` → 某一天，
+`/archive.html` → 全部日期。三个 URL 三个角色，没有别名：**页内永远能跳回首页，也永远能往前后一天走**
+（日期页顶栏自带 `‹ 前一天 / 后一天 › / 全部日期 / 最新`）。旧的 `/gs50_dashboard.html` 已退役，只剩一个跳到 `/` 的壳。
 
 `docs/` 体积参考：一页 ~220–250 KB（gzip 后 ~46 KB，git 内部同样压缩），
 250 个交易日 ≈ 11 MB/年，两年内不用担心仓库变大。
@@ -90,9 +93,9 @@ data/
   consensus/{ts_code}.csv   A 股研报原文缓存（改窗口不用重抓）
 docs/
   YYYYMMDD.html             每天一份，永不覆盖
-  index.html                跳最新一期
+  index.html                首页门厅：最新一期结论 + 读数 + 温度史 + 入口（每次运行重写，不自动跳）
   archive.html              归档页（趋势 + 逐日表）
-  gs50_dashboard.html       永远等于最新一期（兼容老链接 / 本地双击）
+  gs50_dashboard.html       已退役：只留一个跳到 index.html 的壳（兼容老链接 / 本地双击）
   data/YYYYMMDD.json        归档页用的每日摘要（<1 KB）
 run_daily.bat               双击跑当天
 deploy.bat                  双击 commit + push 到 GitHub
@@ -145,9 +148,27 @@ deploy.bat                  双击 commit + push 到 GitHub
 
 1 温度计 · 2 广度与分化 · 3 结构轮动 · 4 名单 vs 板块 · 5 异动榜 · 6 全表 · 7 估值（贵不贵 × 有没有人追）· 8 明天盯什么（规则生成）· 9 口径与积累
 
-另有一页 `docs/archive.html`：已归档期数 / 最新温度 / 区间平均温度 / 日均中位 / 跑赢基准天数 / 最新港股中位，
+另有一页 `docs/index.html`（首页门厅）：当天的结论当 H1、四项读数（温度 / A 股中位 / 超额 / 成交占比）、
+37 期温度史、最近五期列表，以及「进入本期复盘 / 全部 37 期」两个入口。不自动跳转，可收藏。
+
+另有一页 `docs/archive.html`：最新一期（日期 + 温度 + 中位 + 超额）/ 区间平均温度 / 日均中位 / 跑赢基准天数 / 最新港股中位，
 三张图（温度分折线、A 股中位柱 + 沪深300 / 创业板指虚线、港股中位柱 + 恒生科技虚线）和逐日表（14 列：温度、A 股中位、涨跌、新高、成交额、
 占 A 股市场、超额300、超额创50、港股中位、超额 HSTECH、5/20 日、异动），每行链到那一天的完整页面。
+
+逐日表**按月份用 `<details>` 分组**（最新月默认展开，其余收起，每组标题带「N 期 · 平均温度 · 跑赢 x/y」），
+上方一排月份锚点可跳转（目标是折叠的月时会自动展开）。所以页面高度只跟「一个月多少天」有关，
+不会随历史线性变长；不加分页，因为这张表的价值就是「一眼扫到连续多天」，而 `<details>` 里的内容
+仍会被浏览器 Ctrl+F 找到。桌面端表头吸顶（手机端 `.scroll` 要横向滑动，所以不吸顶）。
+
+### 排版口径（字号 / 图表缩放）
+
+- 正文 15px；除正文外的所有小字**不低于 12.4px**（卡片说明、表头、侧栏、口径折叠、页脚都在这一层）。
+- 图表是写进 HTML 的 inline SVG，坐标画在 **1120 宽的虚拟画布**上，再由 `.chart svg{width:100%}` 缩到容器宽度。
+  所以图内字号写在 `FT_T` / `FT_S` 两个常量上（`build_gs50_dashboard.py`、`build_archive.py` 各一份），
+  **只有两档**：标题 15.6、其余全部 13.6 —— 落盘后实际渲染约 12.5–13.3px。不要再加第三档，也不要写回 9.5/10。
+- 画布放不下时（日报页 vw < 1350、归档页 vw < 1240）**横向滑动**，而不是把字压低：
+  `.chart svg{min-width:1030px}` + `.chart{overflow-x:auto}`。要改字号先想清楚缩放倍数。
+- 温度计（第 1 节）是例外：它是 CSS 色带（`.gauge/.gbar`），不跟着画布缩放，永远 16px 高、字是真字号。
 
 ### 基准怎么选（重要）
 

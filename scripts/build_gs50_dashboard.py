@@ -10,7 +10,8 @@
     data/hk/YYYYMMDD.csv       港股 13 家（快照 + 前复权日线 + 共识 NTM PE）
     data/em_cons.csv           板块-个股关系（77 个 AI 相关概念板块）
 输出：
-    docs/gs50_dashboard.html   离线单文件，内嵌 SVG
+    docs/<YYYYMMDD>.html       那一天的快照，永不覆盖（页面顶栏自带 前一天 / 后一天）
+    docs/gs50_dashboard.html   遗留别名：最新一期的副本（run_daily.py 负责写）
 
 页面结构（复盘顺序）：
     1 温度计   2 广度与分化   3 结构轮动   4 名单 vs 板块   5 异动榜
@@ -60,6 +61,28 @@ SHORT = {"Semiconductors": "半导体", "Infrastructure": "基础设施", "Power
          "Application (Physical)": "应用·物理", "Application (AI+)": "应用·AI+", "AI Model": "模型"}
 BENCH = {"000300": "沪深300", "399006": "创业板指", "000688": "科创50", "000001": "上证指数",
          "HSTECH": "恒生科技"}
+# GS 表里的细分是英文，页面直接显示中文（没列到的原样回退，不硬编名单）
+SECTOR_CN = {
+    "LLM & Multimodal": "大模型/多模态", "E-commerce": "电商", "Entertainment & Media": "娱乐传媒",
+    "Finance": "金融", "Healthcare": "医疗健康", "Autonomous Driving": "自动驾驶",
+    "Consumer Hardware": "消费硬件", "Humanoid Robots": "人形机器人", "Cooling": "液冷",
+    "Data Center": "数据中心", "Optical Transceivers": "光模块", "PCB/CCL": "PCB/覆铜板",
+    "Servers and Support": "服务器", "Data Center Power": "数据中心电源", "Grid Transmission": "电网传输",
+    "Power Generation": "发电", "AI Platform & Software": "芯片IP/平台", "Foundry": "晶圆代工",
+    "IC Design": "芯片设计", "Materials": "半导体材料", "Memory": "存储", "OSAT": "封测",
+    "SPE": "半导体设备",
+}
+
+
+def sec_cn(v):
+    """细分英文 → 中文；表里没有的细分原样返回，不会因为新增细分而丢字"""
+    try:
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    t = str(v).strip()
+    return SECTOR_CN.get(t, t)
 # 超额基准：沪深300 只是「A 股宽基 beta」参考，与这份名单的结构（688/300/002 占 44%、无银行地产）错配；
 # 所以另给两个同风格对照：创业板指（A 股成长）、恒生科技（港股 13 家的同市场对照）。
 STYLE_BENCH = {"A": "创业板指", "HK": "恒生科技"}
@@ -240,7 +263,7 @@ def build():
         for col, src in (("close", "price"), ("pct_chg", "pct_chg"), ("mcap_yi", "total_mv_yi"),
                          ("pe_ttm_new", "pe_ttm"), ("pe_ntm", "pe_ntm"), ("n_brokers", "n_brokers"),
                          ("turnover", "turnover"), ("float_mcap_yi", "float_mcap_yi"),
-                         ("amount_yi", "amount_yi"), ("amt_mult", "amt_mult"),
+                         ("amount_yi", "amount_yi"), ("amt_mult", "amt_mult"), ("amt_20d", "amt_20d"),
                          ("ret5", "ret5"), ("ret10", "ret10"), ("ret20", "ret20"),
                          ("ret_all", "ret_all"), ("dist_hi60", "dist_hi60"),
                          ("dist_lo250", "dist_lo250"), ("sigma60", "sigma60")):
@@ -264,7 +287,7 @@ def build():
 
     cols_keep = ["name_cn", "ai_layer", "ai_sector", "market", "code", "close", "pct_chg",
                  "amount_yi", "mcap_yi", "pe_ttm_new", "pe_ntm", "ret5", "ret10", "ret20", "ret_all",
-                 "amt_mult", "turnover", "float_mcap_yi", "vol_ratio_q", "pb", "dist_hi60",
+                 "amt_mult", "amt_20d", "turnover", "float_mcap_yi", "vol_ratio_q", "pb", "dist_hi60",
                  "dist_lo250", "sigma60", "limit_up", "limit_down", "n_brokers", "g_fwd"]
     for df in (a, hk):
         for c in cols_keep:
@@ -491,8 +514,8 @@ def build():
                 tags.append((f"{z:+.1f}σ", "#bc8cff"))
         if tags:
             moves.append({"name": r.name_cn, "code": r.code, "layer": r.ai_layer,
-                          "pct": r.pct_chg, "amt": r.amount_yi, "tags": tags,
-                          "amt_mult": r.amt_mult, "ret5": r.ret5, "turn": r.turn})
+                          "sector": r.ai_sector, "pct": r.pct_chg, "amt": r.amount_yi, "tags": tags,
+                          "amt_mult": r.amt_mult, "amt_20d": r.amt_20d, "ret5": r.ret5, "turn": r.turn})
     moves = sorted(moves, key=lambda m: -(abs(m["pct"]) if not pd.isna(m["pct"]) else 0))
     # 异动个股 → 所属板块当日中位（判断独走 vs 共振）
     code_boards = cons_map.groupby("code6").bk.apply(list).to_dict()
@@ -500,7 +523,11 @@ def build():
         bls = code_boards.get(m["code"], [])
         sub = bdf[bdf.bk.isin(bls)] if not bdf.empty else pd.DataFrame()
         m["board"] = "、".join(sub.nlargest(2, "n").board.tolist()) if not sub.empty else "—"
+        # 板块中位 = 该股所属全部 AI 概念板块「成分等权中位」的均值（tooltip 把用了哪几个板块摊开）
         m["board_med"] = float(sub.med.mean()) if not sub.empty else float("nan")
+        m["board_tip"] = (chr(10).join(f"{x.board} {x.med:+.2f}%（{int(x.n)} 家成分）"
+                                       for _, x in sub.nlargest(6, "n").iterrows())
+                          + f"{chr(10)}→ 均值 {float(sub.med.mean()):+.2f}%") if not sub.empty else ""
 
     return dict(gs=gs, panel=panel, day=day, days=days, stats=stats, theme=theme, bench=bench,
                 bench5=bench5, bench20=bench20, score=score, quote_day=quote_day,
@@ -537,9 +564,64 @@ def sparkline(vals, w=86, h=22, color="#58a6ff", tip=""):
             f"<path d='{d}' fill='none' stroke='{c}' stroke-width='1.4'/></svg>")
 
 
+def sub_lines(text, fs, max_units):
+    """把图内那句说明按视觉宽度折成几行（CJK≈1em，ASCII≈0.58em）。
+
+    行数按总量定，每行宽度平摊、断点尽量落在标点/空格上——避免出现「…虚线框标出」+「出）」这种孤字。
+    """
+    PUNCT = "；。，、·／/｜）) 」』"
+
+    def wide(t):
+        return sum(fs if ord(c) > 0x2E7F else fs * 0.58 for c in t)
+
+    lines = []
+    for para in str(text).strip().split(chr(10)):      # 手写换行也算分段
+        para = para.strip()
+        if not para:
+            continue
+        if wide(para) <= max_units:
+            lines.append(para)
+        else:
+            lines.extend(_wrap_para(para, fs, max_units, wide))
+    return lines
+
+
+def _wrap_para(rest, fs, max_units, wide):
+    PUNCT = "；。，、·／/｜）) 」』"
+    total = wide(rest)
+    if total <= max_units:
+        return [rest]
+    n = max(2, math.ceil(total / max_units))
+    out = []
+    while rest and len(out) < n - 1:
+        target = wide(rest) / (n - len(out))
+        wid, cut = 0.0, 0
+        for i, ch in enumerate(rest):
+            wid += fs if ord(ch) > 0x2E7F else fs * 0.58
+            if wid >= target:
+                cut = i + 1
+                break
+        lo = max(1, cut - int(cut * 0.25))
+        hi = min(len(rest) - 1, cut + int(cut * 0.25))
+        best = None
+        for j in list(range(cut - 1, lo - 1, -1)) + list(range(cut, hi)):
+            if rest[j] in PUNCT:
+                best = j + 1
+                break
+        if best:
+            cut = best
+        if cut <= 0 or cut >= len(rest):
+            break
+        out.append(rest[:cut].rstrip())
+        rest = rest[cut:].lstrip(PUNCT)
+    if rest:
+        out.append(rest)
+    return out
+
+
 def line_chart(days, series, title, sub, W=1120, H=300, fmt="{:.1f}%", zero=True, ylab=""):
     """多序列折线。series: [{name, color, values(list, 可含 nan), dash}]"""
-    L, R, T, B = 62, 118, 46, 34
+    L, R, T, B = 70, 134, 50, 36
     allv = [v for s in series for v in s["values"] if v is not None and not (isinstance(v, float) and math.isnan(v))]
     if not allv:
         return "<div class='note'>无数据</div>"
@@ -558,14 +640,14 @@ def line_chart(days, series, title, sub, W=1120, H=300, fmt="{:.1f}%", zero=True
     def yy(v): return T + (H - T - B) * (hi - v) / (hi - lo)
 
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='13' font-weight='600'>{esc(title)}</text>")
-    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='11'>{esc(sub)}</text>")
+    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
+    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='{FT_S}'>{esc(sub)}</text>")
     ticks = max(2, int(round((hi - lo) / step)))
     for k in range(ticks + 1):
         v = lo + step * k
         y = yy(v)
         p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='#232b36'/>")
-        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#6e7681' font-size='10' text-anchor='end'>{fmt.format(v)}</text>")
+        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{fmt.format(v)}</text>")
     if zero and lo < 0 < hi:
         p.append(f"<line x1='{L}' y1='{yy(0):.1f}' x2='{W-R}' y2='{yy(0):.1f}' stroke='#3d4a5c' stroke-dasharray='3 3'/>")
     step = max(1, n // 9)
@@ -573,7 +655,7 @@ def line_chart(days, series, title, sub, W=1120, H=300, fmt="{:.1f}%", zero=True
     if ticks_x[-1] != n - 1:
         ticks_x = [i for i in ticks_x if n - 1 - i >= step * 0.6] + [n - 1]
     for i in ticks_x:
-        p.append(f"<text x='{xx(i):.1f}' y='{H-B+16}' fill='#6e7681' font-size='9.5' text-anchor='middle'>{days[i][4:6]}-{days[i][6:8]}</text>")
+        p.append(f"<text x='{xx(i):.1f}' y='{H-B+16}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{days[i][4:6]}-{days[i][6:8]}</text>")
     labels = []
     for s in series:
         seg, started = [], False
@@ -596,38 +678,38 @@ def line_chart(days, series, title, sub, W=1120, H=300, fmt="{:.1f}%", zero=True
         for i, v in enumerate(s["values"]):
             if v is None or (isinstance(v, float) and math.isnan(v)):
                 continue
-            p.append(f"<circle cx='{xx(i):.1f}' cy='{yy(v):.1f}' r='7' fill='transparent' "
+            p.append(f"<circle cx='{xx(i):.1f}' cy='{yy(v):.1f}' r='10' fill='transparent' "
                      f"data-tip='{esc(s['name'])} · {days[i][4:6]}-{days[i][6:8]} · {fmt.format(v)}'/>")
     labels.sort()
     for i in range(1, len(labels)):
-        if labels[i][0] - labels[i - 1][0] < 14:
-            labels[i][0] = labels[i - 1][0] + 14
+        if labels[i][0] - labels[i - 1][0] < 20:
+            labels[i][0] = labels[i - 1][0] + 20
     for y, name, col in labels:
-        p.append(f"<text x='{W-R+8}' y='{min(y, H-B+2):.1f}' fill='{col}' font-size='10.5'>{esc(name)}</text>")
+        p.append(f"<text x='{W-R+8}' y='{min(y, H-B+2):.1f}' fill='{col}' font-size='{FT_S}'>{esc(name)}</text>")
     p.append("</svg>")
     return "".join(p)
 
 
-def heatgrid(rows, cols, values, title, sub, W=1120, rowh=38):
+def heatgrid(rows, cols, values, title, sub, W=1120, rowh=42):
     """行 × 列 热力矩阵。values[r][c]"""
-    L, T = 96, 64
+    L, T = 106, 72
     cw = (W - L - 20) / len(cols)
     H = T + rowh * len(rows) + 26
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='0' y='18' fill='#e6edf3' font-size='13' font-weight='600'>{esc(title)}</text>")
-    p.append(f"<text x='0' y='35' fill='#8b949e' font-size='11'>{esc(sub)}</text>")
+    p.append(f"<text x='2' y='18' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
+    p.append(f"<text x='2' y='35' fill='#8b949e' font-size='{FT_S}'>{esc(sub)}</text>")
     for j, c in enumerate(cols):
-        p.append(f"<text x='{L+cw*(j+0.5):.1f}' y='{T-10}' fill='#8b949e' font-size='10.5' text-anchor='middle'>{esc(c)}</text>")
+        p.append(f"<text x='{L+cw*(j+0.5):.1f}' y='{T-10}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{esc(c)}</text>")
     for i, r in enumerate(rows):
         y = T + i * rowh
-        p.append(f"<text x='{L-10}' y='{y+rowh/2+4:.1f}' fill='#c9d5e1' font-size='11' text-anchor='end'>{esc(r)}</text>")
+        p.append(f"<text x='{L-10}' y='{y+rowh/2+4:.1f}' fill='#c9d5e1' font-size='{FT_S}' text-anchor='end'>{esc(r)}</text>")
         for j in range(len(cols)):
             v = values[i][j]
             bg, fg = heat_color(v)
             tip = "" if v is None or (isinstance(v, float) and math.isnan(v)) else f" data-tip='{esc(r)} · {esc(c)} · {v:+.2f}%'"
             p.append(f"<rect x='{L+cw*j+2:.1f}' y='{y+3:.1f}' width='{cw-4:.1f}' height='{rowh-6:.1f}' rx='4' fill='{bg}'{tip}/>")
             txt = "—" if v is None or (isinstance(v, float) and math.isnan(v)) else f"{v:+.1f}%"
-            p.append(f"<text x='{L+cw*(j+0.5):.1f}' y='{y+rowh/2+4:.1f}' fill='{fg}' font-size='11' text-anchor='middle'>{txt}</text>")
+            p.append(f"<text x='{L+cw*(j+0.5):.1f}' y='{y+rowh/2+4:.1f}' fill='{fg}' font-size='{FT_S}' text-anchor='middle'>{txt}</text>")
     p.append("</svg>")
     return "".join(p)
 
@@ -654,7 +736,7 @@ def figbox(groups, figs):
 
 def quadrant(rows, title, sub, W=1120, H=420, foot=""):
     """动量 × 量能变化 象限：rows=[{name,color,x(量能倍数),y(当日中位),size}]"""
-    L, R, T, B = 62, 30, 50, 42
+    L, R, T, B = 68, 34, 56, 46
     xs = [r["x"] for r in rows if not pd.isna(r["x"])]
     ys = [r["y"] for r in rows if not pd.isna(r["y"])]
     if not xs or not ys:
@@ -666,8 +748,8 @@ def quadrant(rows, title, sub, W=1120, H=420, foot=""):
     def yy(v): return T + (H - T - B) * (y1 - v) / (y1 - y0)
 
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='13' font-weight='600'>{esc(title)}</text>")
-    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='11'>{esc(sub)}</text>")
+    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
+    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='{FT_S}'>{esc(sub)}</text>")
     p.append(f"<rect x='{L}' y='{T}' width='{W-L-R}' height='{H-T-B}' fill='#12171e' stroke='#232b36' rx='6'/>")
     p.append(f"<line x1='{xx(1):.1f}' y1='{T}' x2='{xx(1):.1f}' y2='{H-B}' stroke='#3d4a5c' stroke-dasharray='4 4'/>")
     p.append(f"<line x1='{L}' y1='{yy(0):.1f}' x2='{W-R}' y2='{yy(0):.1f}' stroke='#3d4a5c' stroke-dasharray='4 4'/>")
@@ -675,48 +757,115 @@ def quadrant(rows, title, sub, W=1120, H=420, foot=""):
                                    ("放量下跌", W - R - 14, H - B - 9, DOWN, "end"),
                                    ("缩量上涨", L + 12, T + 17, "#8b949e", "start"),
                                    ("缩量下跌", L + 12, H - B - 9, "#8b949e", "start")):
-        p.append(f"<text x='{tx}' y='{ty}' fill='{col}' font-size='10.5' text-anchor='{anch}'>{lbl}</text>")
+        p.append(f"<text x='{tx}' y='{ty}' fill='{col}' font-size='{FT_S}' text-anchor='{anch}'>{lbl}</text>")
     draw = [r for r in rows if not (pd.isna(r["x"]) or pd.isna(r["y"]))]
     draw.sort(key=lambda r: (-r["y"], r["x"]))
+
+    def _orad(o):
+        return 6.5 + 10 * math.sqrt(min(o.get("size", 1) / 300, 1))
     boxes = []
     for r in draw:
-        rad = 5 + 9 * math.sqrt(min(r.get("size", 1) / 300, 1))
+        rad = 6.5 + 10 * math.sqrt(min(r.get("size", 1) / 300, 1))
         cx_, cy_ = xx(r["x"]), yy(r["y"])
         tip = esc(f"{r['name']}\n量能 {r['x']:.2f}× · 动量 {r['y']:+.2f}%")
         if r.get("n"):
             tip += esc(f" · {int(r['n'])} 家")
         p.append(f"<circle cx='{cx_:.1f}' cy='{cy_:.1f}' r='{rad:.1f}' fill='{r['color']}' opacity='.62' "
                  f"stroke='{r['color']}' data-tip='{tip}'/>")
-        for dy in (4, -8, 16, -20, 28):
+        for dy in (4, -8, 16, -20, 28, -32):
             for dx, anch in ((rad + 3, "start"), (-rad - 3, "end")):
                 bx, by = cx_ + dx, cy_ + dy
-                est = 10.8 * len(str(r["name"]))
-                if anch == "start" and bx + est > W - R - 8:
+                est = 13.8 * len(str(r["name"]))
+                x0, x1 = (bx, bx + est) if anch == "start" else (bx - est, bx)
+                if x1 > W - R - 8 or x0 < L + 4:
                     continue
-                if anch == "end" and bx - est < L + 4:
+                # 已经放下的标签 + 别人的气泡，两个都要让开（自己那个不算：dy 本来就贴着它写）
+                if not _box_free(x0, by - 11, x1, by + 3, boxes,
+                                 [(xx(o["x"]), yy(o["y"]), _orad(o)) for o in draw if o is not r]):
                     continue
-                if any(abs(bx - b0) < 46 and abs(by - b1) < 11 for b0, b1 in boxes):
-                    continue
-                boxes.append((bx, by))
-                p.append(f"<text x='{bx:.1f}' y='{by:.1f}' fill='#c9d5e1' font-size='10' text-anchor='{anch}'>{esc(r['name'])}</text>")
+                boxes.append((x0, by - 11, x1, by + 3))
+                p.append(f"<text x='{bx:.1f}' y='{by:.1f}' fill='#c9d5e1' font-size='{FT_S}' text-anchor='{anch}'>{esc(r['name'])}</text>")
                 dy = None
                 break
             if dy is None:
                 break
     for v in [x for x in (0.8, 1.0, 1.25, 1.5, 2.0) if x0 <= x <= x1]:
-        p.append(f"<text x='{xx(v):.1f}' y='{H-B+16}' fill='#6e7681' font-size='9.5' text-anchor='middle'>{v:.2f}×</text>")
+        p.append(f"<text x='{xx(v):.1f}' y='{H-B+16}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{v:.2f}×</text>")
     for v in range(int(y0), int(y1) + 1, 2 if (y1 - y0) < 16 else 5):
         if v == 0:
             continue
-        p.append(f"<text x='{L-8}' y='{yy(v)+4:.1f}' fill='#6e7681' font-size='9.5' text-anchor='end'>{v:+d}%</text>")
-    p.append(f"<text x='{W-R}' y='{H-8}' fill='#6e7681' font-size='10' text-anchor='end'>{esc(foot or '横轴：成交额 / 20 日均　纵轴：当日中位涨跌　气泡：家数')}</text>")
+        p.append(f"<text x='{L-8}' y='{yy(v)+4:.1f}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{v:+d}%</text>")
+    p.append(f"<text x='{W-R}' y='{H-8}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{esc(foot or '横轴：成交额 / 20 日均　纵轴：当日中位涨跌　气泡：家数')}</text>")
     p.append("</svg>")
     return "".join(p)
 
 
+PE_SUB = ("每家一个点，横线为层内中位；纵轴对数。只标 >150x 与 <12x 两头，" + chr(10) +
+          "空心 = 港股（与 A 股同 NTM 口径，只为区分市场）；负 PE 不画（整层画不出时用虚线框标出）")
+
+
+def _box_free(x0, y0, x1, y1, boxes, dots, skip=None, pad=2):
+    """这个矩形空不空：不压已占的框，也不压任何一个点（点按外接方框 + pad 算）。"""
+    for b0, b1, b2, b3 in boxes:
+        if x1 > b0 and x0 < b2 and y1 > b1 and y0 < b3:
+            return False
+    for j, (cx, cy, cr) in enumerate(dots):
+        if j == skip:
+            continue
+        if x1 > cx - cr - pad and x0 < cx + cr + pad and y1 > cy - cr - pad and y0 < cy + cr + pad:
+            return False
+    return True
+
+
+def place_label(name, x, y, r, dots, boxes, L, R, T, B, W, H, skip=None, fill="#9aa7b4"):
+    """把一个名字放到某个点旁边：先右后左，再逐行上下错开。
+
+    压到别的点或已经放下的标签就换下一个位置；所有位置都不行就不放——图和 tooltip 还在，
+    比让文字压在点上强（文字本来也不吃鼠标事件，见 CSS `.chart svg text{pointer-events:none}`）。
+    dots: [(cx, cy, r)]，skip: 自己那个点的下标。返回 (svg 片段, 占位框)，放不下返回 None。
+    """
+    tw = FT_S * 1.04 * max(len(str(name)), 1)     # 中文按 1em 估宽，宁可留点余量
+    for dy in (0, -1, 1, -2, 2, -3, 3, -4, 4):
+        for side in (1, -1):
+            bx = x + side * (r + 4)
+            by = y + FT_S * 0.30 + dy * (FT_S + 2.5)
+            x0, x1 = (bx, bx + tw) if side > 0 else (bx - tw, bx)
+            y0, y1 = by - FT_S * 0.82, by + FT_S * 0.26
+            if x0 < L + 3 or x1 > W - R - 3 or y0 < T + 2 or y1 > H - B - 2:
+                continue
+            if not _box_free(x0, y0, x1, y1, boxes, dots, skip):
+                continue
+            anch = "start" if side > 0 else "end"
+            return (f"<text x='{bx:.1f}' y='{by:.1f}' fill='{fill}' font-size='{FT_S}' "
+                    f"text-anchor='{anch}'>{esc(name)}</text>", (x0, y0, x1, y1))
+    return None
+
+
+def place_median(med, x_end, ym, dots, boxes, L, R, T, B, W, H, color):
+    """层内中位读数：贴着中位线右端，优先线上方，压到点就往下躲，实在不行换到线的左侧。"""
+    lbl = f"中位 {med:.0f}x"
+    tw = FT_S * 1.04 * len(lbl)
+    for dy in (-8, 9, -24, 25, -40, 41):
+        for x1 in (x_end, None):
+            if x1 is None:
+                x1 = x_end - tw - 24
+            x0 = x1 - tw
+            by = ym + dy
+            y0, y1 = by - FT_S * 0.82, by + FT_S * 0.26
+            if x0 < L + 3 or x1 > W - R - 3 or y0 < T + 2 or y1 > H - B - 2:
+                continue
+            if not _box_free(x0, y0, x1, y1, boxes, dots):
+                continue
+            return (f"<text x='{x1:.1f}' y='{by:.1f}' fill='{color}' font-size='{FT_S}' "
+                    f"text-anchor='end'>{lbl}</text>", (x0, y0, x1, y1))
+    return None
+
+
 def dotplot(df, W=1120, H=470, ymin=8, ymax=600):
-    """分层 PE 打点"""
-    L, R, T, B = 74, 34, 46, 84
+    """分层 PE 打点。所有点先画完，名字最后统一找空位放（见 place_label）。"""
+    L, R, T, B = 80, 36, 52, 96
+    subs = sub_lines(PE_SUB, FT_S, W - L - 16)
+    T += (len(subs) - 1) * (FT_S + 3)
     layers = [l for l in LAYERS if (df.ai_layer == l).any()]
     bw = (W - L - R) / len(layers)
     ly0, ly1 = math.log10(ymin), math.log10(ymax)
@@ -724,24 +873,44 @@ def dotplot(df, W=1120, H=470, ymin=8, ymax=600):
     def yy(v): return T + (H - T - B) * (ly1 - math.log10(max(min(v, ymax), ymin))) / (ly1 - ly0)
 
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='13' font-weight='600'>分层 PE（前瞻共识 NTM）</text>")
-    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='11'>每家一个点，横线为层内中位；纵轴对数。只标 &gt;150x 与 &lt;12x 两头；空心 = 港股（与 A 股同 NTM 口径，只为区分市场）；负 PE 不画</text>")
+    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>分层 PE（前瞻共识 NTM）</text>")
+    for k, line in enumerate(subs):
+        p.append(f"<text x='{L}' y='{37 + k * (FT_S + 3):.0f}' fill='#8b949e' font-size='{FT_S}'>{esc(line)}</text>")
     for v in (10, 20, 30, 50, 100, 200, 300):
         y = yy(v)
         p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='#232b36'/>")
-        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#6e7681' font-size='10.5' text-anchor='end'>{v}x</text>")
+        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{v}x</text>")
+
+    dots, boxes, wants, meds, layers_svg = [], [], [], [], []
     for i, lay in enumerate(layers):
         sx = df[df.ai_layer == lay]
         cx = L + bw * (i + .5)
-        p.append(f"<line x1='{cx-bw*.44:.1f}' y1='{T}' x2='{cx-bw*.44:.1f}' y2='{H-B}' stroke='#1b2430'/>")
-        p.append(f"<text x='{cx}' y='{H-B+22}' fill='{COLOR[lay]}' font-size='11.5' text-anchor='middle'>{SHORT[lay]}</text>")
-        p.append(f"<text x='{cx}' y='{H-B+38}' fill='#6e7681' font-size='10' text-anchor='middle'>n={len(sx)}</text>")
+        chrome = [f"<line x1='{cx-bw*.44:.1f}' y1='{T}' x2='{cx-bw*.44:.1f}' y2='{H-B}' stroke='#1b2430'/>",
+                  f"<text x='{cx}' y='{H-B+22}' fill='{COLOR[lay]}' font-size='{FT_S}' text-anchor='middle'>{SHORT[lay]}</text>",
+                  f"<text x='{cx}' y='{H-B+38}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>n={len(sx)}</text>"]
         vals = sx.pe_ntm.dropna()
-        vals = vals[vals > 0]
-        if len(vals):
-            med = vals.median()
-            p.append(f"<line x1='{cx-bw*.40:.1f}' y1='{yy(med):.1f}' x2='{cx+bw*.40:.1f}' y2='{yy(med):.1f}' stroke='{COLOR[lay]}' stroke-width='2' opacity='.45'/>")
-            p.append(f"<text x='{cx+bw*.42:.1f}' y='{yy(med)+13:.1f}' fill='{COLOR[lay]}' font-size='10.5' text-anchor='end'>中位 {med:.0f}x</text>")
+        drawn = vals[vals > 0]
+        skipped = len(sx) - len(drawn)
+        neg = int((vals < 0).sum())
+        if skipped:
+            why = (f"负 PE {skipped} 家不画" if neg == skipped else
+                   f"{skipped} 家不画（负 PE {neg}）" if neg else f"无 PE {skipped} 家")
+            chrome.append(f"<text x='{cx}' y='{H-B+52}' fill='#6e7681' font-size='{FT_S}' text-anchor='middle'>"
+                          f"{why}</text>")
+        if not len(drawn):
+            # 整层都画不出来（如模型层全是负 PE）：虚线框 + 明说，而不是留白让人以为漏了
+            bx, bw_ = cx - bw * .30, bw * .60
+            chrome.append(f"<rect x='{bx:.1f}' y='{T+26}' width='{bw_:.1f}' height='{H-B-T-56}' rx='9' "
+                          f"fill='#12171e' stroke='#39424e' stroke-dasharray='4 4'/>")
+            chrome.append(f"<text x='{cx}' y='{(T+H-B)/2:.1f}' fill='#7d8894' font-size='{FT_S}' "
+                          f"text-anchor='middle'>全为负 PE 或无数</text>")
+            chrome.append(f"<text x='{cx}' y='{(T+H-B)/2+15:.1f}' fill='#6e7681' font-size='{FT_S}' "
+                          f"text-anchor='middle'>画不出点</text>")
+        if len(drawn):
+            med = drawn.median()
+            chrome.append(f"<line x1='{cx-bw*.40:.1f}' y1='{yy(med):.1f}' x2='{cx+bw*.40:.1f}' y2='{yy(med):.1f}' stroke='{COLOR[lay]}' stroke-width='2' opacity='.45'/>")
+            meds.append((med, cx + bw * .42, yy(med), COLOR[lay]))
+        holes = []
         for k, (_, r) in enumerate(sx.iterrows()):
             v = r.pe_ntm
             if pd.isna(v) or v <= 0:
@@ -751,19 +920,42 @@ def dotplot(df, W=1120, H=470, ymin=8, ymax=600):
             col = COLOR[lay]
             pe_lbl = "TTM" if r.market == "HK" else "NTM"
             tip = esc(f"{r.name_cn}\nPE {pe_lbl} {v:.1f}x · 今日 {r.pct_chg:+.2f}%")
+            # pointer-events='all'：空心点 fill='none' 时默认只有 1.6px 的描边可命中，内圈是死区
             if r.market == "HK":
-                p.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='4.6' fill='none' stroke='{col}' stroke-width='1.6' opacity='.85' data-tip='{tip}'/>")
+                holes.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='5.8' fill='none' stroke='{col}' stroke-width='1.6' opacity='.85' pointer-events='all' data-tip='{tip}'/>")
             else:
-                p.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='4.6' fill='{col}' opacity='.88' data-tip='{tip}'/>")
+                holes.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='5.8' fill='{col}' opacity='.88' pointer-events='all' data-tip='{tip}'/>")
+            dots.append((x, y, 5.8))
             if v > 150 or v < 12:
-                p.append(f"<text x='{x+7:.1f}' y='{y+4:.1f}' fill='#9aa7b4' font-size='9.5'>{esc(r.name_cn)}</text>")
+                pr = abs(math.log10(v / 150)) if v > 150 else abs(math.log10(v / 12))
+                wants.append((pr, str(r.name_cn), len(dots) - 1))
+        layers_svg.append((chrome, holes))
+
+    for chrome, holes in layers_svg:
+        p.extend(chrome)
+        p.extend(holes)
+
+    # 先摆层内中位读数（每层一个锚点），再摆公司名：偏离 150x / 12x 越远越优先
+    for med, mx_, ym, col in meds:
+        got = place_median(med, mx_, ym, dots, boxes, L, R, T, B, W, H, col)
+        if got:
+            txt, box = got
+            p.append(txt)
+            boxes.append(box)
+    for _, name, idx in sorted(wants, key=lambda t: -t[0]):
+        x, y, rad = dots[idx]
+        got = place_label(name, x, y, rad, dots, boxes, L, R, T, B, W, H, skip=idx)
+        if got:
+            txt, box = got
+            p.append(txt)
+            boxes.append(box)
     p.append("</svg>")
     return "".join(p)
 
 
 def scatter(df, W=1120, H=470):
     """PE_NTM × 隐含增速（PEG 视角）。虚线 = PEG 等值线，线下方 = 增速配得上估值。"""
-    L, R, T, B = 74, 40, 46, 62
+    L, R, T, B = 80, 42, 52, 70
     if "g_fwd" not in df.columns:
         return "<div class='note'>无 FY1/FY2 共识，无法计算增速</div>"
     d = df[(df.pe_ntm > 0) & df.g_fwd.notna() & (df.g_fwd > 0)].copy()
@@ -778,16 +970,16 @@ def scatter(df, W=1120, H=470):
     def yy(p): return T + (H - T - B) * (ly1 - math.log10(min(max(p, py0), py1))) / (ly1 - ly0)
 
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='13' font-weight='600'>贵不贵 × 增速配不配（PEG 视角）</text>")
-    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='11'>横轴 FY2/FY1 净利润增速（对数），纵轴 PE_NTM（对数）；灰虚线 = PEG 1 / 2 / 3，线下方 = 增速配得上估值。仅 A 股 {len(d)} 家（港股缺 FY1/FY2 共识）</text>")
+    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>贵不贵 × 增速配不配（PEG 视角）</text>")
+    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='{FT_S}'>横轴 FY2/FY1 增速，纵轴 PE_NTM；虚线 = PEG 1 / 2 / 3，线下方 = 增速配得上估值　·　仅 A 股 {len(d)} 家</text>")
     for g in (10, 20, 40, 100, 200, 400):
         x = xx(g)
         p.append(f"<line x1='{x:.1f}' y1='{T}' x2='{x:.1f}' y2='{H-B}' stroke='#232b36'/>")
-        p.append(f"<text x='{x:.1f}' y='{H-B+18}' fill='#6e7681' font-size='10.5' text-anchor='middle'>{g}%</text>")
+        p.append(f"<text x='{x:.1f}' y='{H-B+18}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{g}%</text>")
     for v in (10, 20, 30, 50, 100, 200, 300, 500):
         y = yy(v)
         p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='#232b36'/>")
-        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#6e7681' font-size='10.5' text-anchor='end'>{v}x</text>")
+        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{v}x</text>")
     # PEG 等值线：PE = PEG × 增速
     for k, colr in ((1, "#58a6ff"), (2, "#3d4a5c"), (3, "#3d4a5c")):
         g_lo = max(gx0, py0 / k)
@@ -797,19 +989,20 @@ def scatter(df, W=1120, H=470):
         p.append(f"<line x1='{xx(g_lo):.1f}' y1='{yy(k*g_lo):.1f}' x2='{xx(g_hi):.1f}' y2='{yy(k*g_hi):.1f}' "
                  f"stroke='{colr}' stroke-dasharray='5 4' opacity='.65'/>")
         lx_, ly_ = xx(g_lo * 1.08), yy(k * g_lo * 1.08)
-        p.append(f"<text x='{lx_:.1f}' y='{ly_-6:.1f}' fill='{colr}' font-size='9.5' text-anchor='start' opacity='.9'>PEG {k}</text>")
-    p.append(f"<text x='{L+8}' y='{T+16:.0f}' fill='#f85149' font-size='10' opacity='.85'>↑ 贵：增速跟不上估值</text>")
-    p.append(f"<text x='{W-R-8}' y='{H-B-10:.0f}' fill='#3fb950' font-size='10' text-anchor='end' opacity='.85'>↓ 便宜：增速配得上</text>")
+        p.append(f"<text x='{lx_:.1f}' y='{ly_-6:.1f}' fill='{colr}' font-size='{FT_S}' text-anchor='start' opacity='.9'>PEG {k}</text>")
+    p.append(f"<text x='{L+8}' y='{T+16:.0f}' fill='#f85149' font-size='{FT_S}' opacity='.85'>↑ 贵：增速跟不上估值</text>")
+    p.append(f"<text x='{W-R-8}' y='{H-B-10:.0f}' fill='#3fb950' font-size='{FT_S}' text-anchor='end' opacity='.85'>↓ 便宜：增速配得上</text>")
     lx = L
     for lay in LAYERS:
         if not (d.ai_layer == lay).any():
             continue
-        p.append(f"<circle cx='{lx+4:.1f}' cy='{H-16:.1f}' r='3.4' fill='{COLOR[lay]}' opacity='.8'/>")
-        p.append(f"<text x='{lx+11:.1f}' y='{H-12:.1f}' fill='#8b949e' font-size='9.5'>{esc(SHORT[lay])}</text>")
-        lx += 12 + 11 * len(SHORT[lay])
+        p.append(f"<circle cx='{lx+4:.1f}' cy='{H-16:.1f}' r='4.4' fill='{COLOR[lay]}' opacity='.8'/>")
+        p.append(f"<text x='{lx+11:.1f}' y='{H-12:.1f}' fill='#8b949e' font-size='{FT_S}'>{esc(SHORT[lay])}</text>")
+        lx += 14 + 14 * len(SHORT[lay])
     mx = max(float(pd.to_numeric(d.mcap_yi, errors="coerce").fillna(0).max()), 1)
+    bubbles = []        # (优先级, 名字, x, y, 半径)：名字最后统一摆
     for _, r in d.iterrows():
-        rr = 4 + 13 * math.sqrt((r.mcap_yi or 0) / mx)
+        rr = 5 + 13 * math.sqrt((r.mcap_yi or 0) / mx)
         col = COLOR.get(r.ai_layer, "#8b949e")
         peg = r.pe_ntm / r.g_fwd if r.g_fwd else float("nan")
         tip = esc(f"{r.name_cn} · {SHORT.get(r.ai_layer, '')}\nPE NTM {r.pe_ntm:.0f}x · 增速 {r.g_fwd:+.0f}%\nPEG {peg:.2f}"
@@ -817,49 +1010,76 @@ def scatter(df, W=1120, H=470):
         p.append(f"<circle cx='{xx(r.g_fwd):.1f}' cy='{yy(r.pe_ntm):.1f}' r='{rr:.1f}' fill='{col}' opacity='.5' "
                  f"stroke='{col}' data-tip='{tip}'/>")
         if r.g_fwd > gx1:
-            p.append(f"<text x='{W-R-2:.1f}' y='{yy(r.pe_ntm)+3.5:.1f}' fill='{col}' font-size='10' opacity='.9'>▸</text>")
-    # 标签：离 PEG=1 越远 + 市值越大越优先
-    boxes = []
-    pri = d.assign(score=(d.pe_ntm / d.g_fwd).apply(lambda v: abs(math.log10(v)) if v > 0 else 0)
-                   + d.mcap_yi.fillna(0) / 8000).nlargest(15, "score")
-    for _, r in pri.iterrows():
-        x, y = xx(r.g_fwd) + 9, yy(r.pe_ntm) + 3.5
-        if any(abs(x - bx) < 54 and abs(y - by) < 12 for bx, by in boxes):
-            continue
-        boxes.append((x, y))
-        p.append(f"<text x='{x:.1f}' y='{y:.1f}' fill='#c9d5e1' font-size='9.5'>{esc(r.name_cn)}</text>")
+            p.append(f"<text x='{W-R-2:.1f}' y='{yy(r.pe_ntm)+4.5:.1f}' fill='{col}' font-size='{FT_S}' opacity='.9'>▸</text>")
+        peg_ = r.pe_ntm / r.g_fwd if r.g_fwd else 1.0
+        bubbles.append((abs(math.log10(peg_)) + (r.mcap_yi or 0) / 8000,
+                        str(r.name_cn), xx(r.g_fwd), yy(r.pe_ntm), rr))
+    # 标签：离 PEG=1 越远 + 市值越大越优先；压到气泡或别的标签就换位置，都不行就不放
+    boxes, geo = [], [(b[2], b[3], b[4]) for b in bubbles]
+    for j in sorted(range(len(bubbles)), key=lambda j: -bubbles[j][0])[:15]:
+        _, name, x, y, rr = bubbles[j]
+        got = place_label(name, x, y, rr, geo, boxes, L, R, T, B, W, H, skip=j, fill="#c9d5e1")
+        if got:
+            txt, box = got
+            p.append(txt)
+            boxes.append(box)
     p.append("</svg>")
     return "".join(p)
+
+
+# ---------- 图表内排版 ----------
+# 图表 SVG 的坐标写在 1120 宽的虚拟画布上，落盘后再缩到容器宽度（桌面 ≈0.92×、手机 ≈0.93×）。
+# 所以写进 SVG 的字号要比「想看到的 CSS px」略大；这里两档就够，别再加第三档。
+FT_T = 15.6   # 图内标题
+FT_S = 13.6   # 其余全部：副标 / 说明 / 标签 / 轴标 / 单元值
+
+GAUGE_STOPS = [(0, "#2b3947"), (25, "#3d6b8f"), (45, "#7d8894"), (62, "#d29922"),
+               (80, "#f0883e"), (100, "#f85149")]
+
+
+def score_color(s):
+    """温度分数 → 与刻度条同一套色带（侧栏徽标、标题强调共用）"""
+    s = max(0.0, min(100.0, float(s)))
+    for i in range(len(GAUGE_STOPS) - 1):
+        a, b = GAUGE_STOPS[i], GAUGE_STOPS[i + 1]
+        if a[0] <= s <= b[0]:
+            t = (s - a[0]) / (b[0] - a[0])
+            ca = tuple(int(a[1][k:k + 2], 16) for k in (1, 3, 5))
+            cb = tuple(int(b[1][k:k + 2], 16) for k in (1, 3, 5))
+            return "#%02x%02x%02x" % tuple(int(ca[k] + (cb[k] - ca[k]) * t) for k in range(3))
+    return GAUGE_STOPS[-1][1]
+
+
+def _mix(c1, c2, t):
+    a = tuple(int(c1[k:k + 2], 16) for k in (1, 3, 5))
+    b = tuple(int(c2[k:k + 2], 16) for k in (1, 3, 5))
+    return "#%02x%02x%02x" % tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def score_ink(s, t=0.62):
+    """刻度色太暗（低分区尤其），文字用提亮版：留着色相，保住对比度"""
+    return _mix(score_color(s), "#eef4fa", t)
+
+
+GAUGE_TICKS = ((0, "冰点"), (25, "偏冷"), (45, "常温"), (62, "升温"), (80, "过热"))
 
 
 def gauge(score, mood, tip=""):
-    W, H = 1120, 74
-    L, R = 0, 0
-    p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    if tip:
-        p.append(f"<g data-tip='{esc(tip)}'>")
-    stops = [(0, "#2b3947"), (25, "#3d6b8f"), (45, "#7d8894"), (62, "#d29922"), (80, "#f0883e"), (100, "#f85149")]
-    def col(s):
-        for i in range(len(stops) - 1):
-            a, b = stops[i], stops[i + 1]
-            if a[0] <= s <= b[0]:
-                t = (s - a[0]) / (b[0] - a[0])
-                ca = tuple(int(a[1][k:k + 2], 16) for k in (1, 3, 5))
-                cb = tuple(int(b[1][k:k + 2], 16) for k in (1, 3, 5))
-                return "#%02x%02x%02x" % tuple(int(ca[k] + (cb[k] - ca[k]) * t) for k in range(3))
-        return stops[-1][1]
-    for i in range(100):
-        x = W * i / 100
-        p.append(f"<rect x='{x:.1f}' y='26' width='{W/100+0.6:.1f}' height='14' fill='{col(i)}' opacity='.55'/>")
-    x = W * score / 100
-    p.append(f"<polygon points='{x-7:.1f},22 {x+7:.1f},22 {x:.1f},12' fill='#e6edf3'/>")
-    p.append(f"<text x='{x:.1f}' y='60' fill='#e6edf3' font-size='13' font-weight='600' text-anchor='middle'>{mood} {score:.0f}</text>")
-    for v, lbl in ((0, "冰点"), (25, "偏冷"), (45, "常温"), (62, "升温"), (80, "过热")):
-        p.append(f"<text x='{W*v/100:.1f}' y='14' fill='#6e7681' font-size='9.5' text-anchor='{'start' if v==0 else 'middle'}'>{lbl}</text>")
-    if tip:
-        p.append("</g>")
-    p.append("</svg>")
-    return "".join(p)
+    """温度计：CSS 色带，不跟图表画布一起缩放——永远 16px 高，刻度和读数都是真字号。
+    （以前画成 1120×80 的 SVG，手机上被压成 0.28 倍：色带只剩 5px 高、字 3px。）
+    """
+    sc = max(0.0, min(100.0, float(score)))
+    tt = f" data-tip='{esc(tip)}'" if tip else ""
+    marks = []
+    for i, (v, name) in enumerate(GAUGE_TICKS):
+        tf = "translateX(0)" if i == 0 else "translateX(-50%)"
+        marks.append(f"<span style='left:{v}%;transform:{tf}'>{name}</span>")
+    val_tf = "translateX(0)" if sc <= 4 else ("translateX(-100%)" if sc >= 96 else "translateX(-50%)")
+    return (f"<div class='chart gauge'{tt}><div class='gwrap'>"
+            f"<div class='gk'>{''.join(marks)}</div>"
+            f"<div class='gbar'><i style='left:{sc:.1f}%'></i></div>"
+            f"<div class='gval' style='left:{sc:.1f}%;transform:{val_tf}'>{esc(mood)} {sc:.0f}</div>"
+            f"</div></div>")
 
 
 # ------------------------------------------------------------------ 渲染
@@ -884,6 +1104,41 @@ document.querySelectorAll('.figbox').forEach(function (box) {
     });
   });
 });
+
+// 侧栏目录：滚动高亮 + 顶部进度
+(function () {
+  var toc = document.getElementById('toc');
+  if (!toc) return;
+  var links = [].slice.call(toc.querySelectorAll('a'));
+  var secs = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); });
+  var bar = document.querySelector('.bar');
+  var prog = document.getElementById('prog');
+  var active = -1, raf = 0;
+  function offset() { return (bar ? bar.offsetHeight : 0) + (window.innerWidth < 1085 ? 70 : 30); }
+  function update() {
+    raf = 0;
+    var y = window.scrollY + offset(), idx = 0;
+    for (var i = 0; i < secs.length; i++) {
+      if (secs[i] && secs[i].getBoundingClientRect().top + window.scrollY <= y) idx = i;
+    }
+    if (idx !== active) {
+      active = idx;
+      links.forEach(function (a, i) { a.classList.toggle('on', i === idx); });
+      var cur = links[idx];
+      if (cur && toc.scrollWidth > toc.clientWidth) {
+        toc.scrollLeft = cur.offsetLeft - Math.max(16, (toc.clientWidth - cur.offsetWidth) / 2);
+      }
+    }
+    if (prog) {
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      prog.style.transform = 'scaleX(' + (h > 0 ? Math.min(1, Math.max(0, window.scrollY / h)) : 0) + ')';
+    }
+  }
+  function onScroll() { if (!raf) raf = requestAnimationFrame(update); }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  update();
+})();
 
 var tip = document.getElementById('tip');
 document.addEventListener('mousemove', function (e) {
@@ -951,66 +1206,262 @@ document.addEventListener('mousemove', function (e) {
 CSS = """
 :root{--bg:#0e1116;--panel:#161b22;--line:#232b36;--ink:#e6edf3;--dim:#8b949e;
 --up:#f85149;--down:#3fb950;--part:#d29922;--accent:#58a6ff;--accent2:#bc8cff;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+--bar:56px;--side:206px}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-.wrap{max-width:1180px;margin:0 auto;padding:40px 26px 90px}
-.kicker{font:600 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
-h1{font-size:27px;margin:0 0 8px;letter-spacing:-.01em}
-.sub{color:var(--dim);font-size:13.5px;margin:0;max-width:86ch}
-header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:8px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:11px;margin:20px 0 6px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
-.card .v{font:600 23px/1.2 var(--mono)}
-.card .k{color:var(--dim);font-size:11.8px;margin-top:5px}
-.card .x{color:var(--dim);font-size:11px;margin-top:2px;font-family:var(--mono)}
-h2{font-size:18px;margin:44px 0 10px;display:flex;gap:9px;align-items:baseline}
-h2 .n{font:600 11.5px/1 var(--mono);color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:4px 7px}
-h3{font-size:14px;margin:22px 0 6px;color:#dbe6f0}
-.chart{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px 12px 8px;margin:14px 0 6px;overflow:hidden}
-.chart svg{width:100%;height:auto;display:block}
-table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
-th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-thead th{background:#12171e;color:var(--dim);font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:600;position:sticky;top:0}
-tbody tr:hover{background:#171e28}
-.note{color:var(--dim);font-size:12.3px;margin:9px 0 0}
-.na{color:#4d5866}
-.warn{border-left:3px solid var(--part);background:#1a1608;border-radius:6px;padding:11px 15px;margin:14px 0;font-size:12.8px;color:#e8dcc0}
-.tag{font:600 10px/1 var(--mono);padding:3px 6px;border-radius:4px;margin-right:4px;white-space:nowrap}
-.bullets{margin:10px 0 0;padding-left:18px;color:#c9d5e1;font-size:13.4px}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:#1f6feb66;color:#fff}
+*{scrollbar-width:thin;scrollbar-color:#2b3644 transparent}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#2b3644;border-radius:9px;border:2px solid #0e1116}
+::-webkit-scrollbar-thumb:hover{background:#3d4a5c}
+:focus-visible{outline:2px solid #58a6ffcc;outline-offset:2px;border-radius:7px}
+
+/* ---------- 顶栏：日期切换 ---------- */
+.bar{position:sticky;top:0;z-index:60;padding:7px 0;background:#0e1116e6;
+  backdrop-filter:blur(14px) saturate(1.25);border-bottom:1px solid var(--line)}
+.bar-in{max-width:1380px;margin:0 auto;height:calc(var(--bar) - 14px);display:flex;align-items:center;gap:9px;padding:0 22px}
+.brand{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;letter-spacing:.01em;
+white-space:nowrap;color:var(--ink);text-decoration:none}
+.brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);outline:1px solid #58a6ff59;outline-offset:2px}
+.bar .sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:9px 15px;border:1px solid #2b3644;
+border-radius:9px;background:#161b22;color:#c9d5e1;font:500 13.4px/1 inherit;text-decoration:none;
+white-space:nowrap;cursor:pointer;transition:background .16s,border-color .16s,color .16s,transform .12s}
+.btn:hover{background:#1c2430;border-color:#3d4a5c;color:#fff}
+.btn:active{transform:translateY(1px)}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.btn.pri{background:#123050;border-color:#1f6feb7a;color:#9ccbff}
+.btn.pri:hover{background:#173d63;border-color:#58a6ffaa;color:#dcefff}
+.btn.off{background:#12171e;border-color:#222a35;color:#8b949e;cursor:default;pointer-events:none}
+.btn.dnav .dd{font:500 12.8px/1 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.prog{position:absolute;left:0;right:0;bottom:-1px;height:2px}
+.prog i{display:block;height:2px;width:100%;background:#58a6ff;transform:scaleX(0);transform-origin:left;transition:transform .12s linear}
+
+/* ---------- 骨架：侧栏 + 正文 ---------- */
+.shell{max-width:1380px;margin:0 auto;padding:26px 22px 96px;display:grid;
+  grid-template-columns:var(--side) minmax(0,1fr);gap:36px;align-items:start}
+main{min-width:0;max-width:1118px}
+.side{position:sticky;top:calc(var(--bar) + 16px);max-height:calc(100vh - var(--bar) - 32px);
+  overflow:auto;padding-right:2px}
+.side-card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  padding:12px 13px 13px;margin-bottom:18px}
+.side-card .sc{display:flex;align-items:baseline;justify-content:space-between;gap:7px;
+  padding-bottom:7px;margin-bottom:3px;border-bottom:1px solid var(--line);
+  font:600 14px/1.2 var(--mono);letter-spacing:-.01em}
+.side-card .sc .lb{font:600 12.4px/1 inherit;color:var(--dim);letter-spacing:.06em}
+.side-card .sc .dt{color:#c9d5e1;font-variant-numeric:tabular-nums}
+.date-line{display:none;margin:0 0 8px;font:500 12.8px/1.5 var(--mono);color:var(--dim)}
+.side-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  margin-top:8px;font-size:12.6px;color:var(--dim)}
+.side-row b{font:600 13px/1.4 var(--mono);color:#dbe6f0;font-variant-numeric:tabular-nums}
+.side-row b.up{color:var(--up)}
+.side-row b.down{color:var(--down)}
+.toc{display:flex;flex-direction:column;gap:1px}
+.toc a{position:relative;display:flex;align-items:center;gap:9px;padding:6px 10px;
+  border-radius:0 7px 7px 0;color:var(--dim);text-decoration:none;font-size:13.2px;
+  line-height:1.45;transition:background .14s,color .14s}
+.toc a i{font:500 12.4px/1 var(--mono);font-style:normal;color:#7d8894;width:13px;text-align:right;transition:color .14s}
+.toc a:hover{background:#141a22;color:#c9d5e1}
+.toc a.on{background:#18202b;color:var(--ink)}
+.toc a.on i{color:var(--accent)}
+.toc a.on::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:2px;
+  border-radius:2px;background:var(--accent)}
+
+/* ---------- 文字层级 ---------- */
+header.page{padding:0 0 16px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+h1{font-size:29px;line-height:1.32;margin:0 0 7px;letter-spacing:-.022em;font-weight:650;text-wrap:balance}
+h1 .dim{color:var(--dim);font-weight:500}
+.standfirst{margin:0;color:var(--dim);font-size:13.8px;max-width:76ch}
+h2{font-size:17px;margin:40px 0 9px;display:flex;align-items:baseline;gap:9px;letter-spacing:-.01em;
+  scroll-margin-top:calc(var(--bar) + 18px)}
+h2 .n{font:600 12.6px/1 var(--mono);color:#7d8894;width:14px}
+h2 .meta{margin-left:auto;font:500 12.6px/1.4 var(--mono);color:var(--dim)}
+h3{font-size:13.8px;margin:20px 0 5px;color:#dbe6f0}
+.note{color:var(--dim);font-size:12.8px;margin:9px 0 0;max-width:1000px}
+.na{color:#8b949e}
+code{font-family:var(--mono);font-size:12.6px;background:#1c2430;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+
+/* ---------- 卡片 ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(166px,1fr));gap:10px;margin:18px 0 6px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card .v{font:600 22px/1.2 var(--mono);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.card .k{color:var(--dim);font-size:12.6px;margin-top:5px}
+.card .x{color:var(--dim);font-size:12.6px;line-height:1.55;margin-top:4px;font-family:var(--mono)}
+.cards.metrics{margin-bottom:2px}
+.cards.metrics .card{display:flex;flex-direction:column}
+.cards.metrics .card .k{margin-bottom:7px}
+.cards.metrics .x{display:flex;flex-direction:column;gap:1px;margin-top:auto}
+.cards.metrics .x>div{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.cards.metrics .x span{color:#8b949e;font-size:12.6px;white-space:nowrap}
+.cards.metrics .x b{color:#c9d5e1;font-weight:600;font-size:12.6px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.x-u{font-size:13.4px;color:#8b949e;font-family:inherit}
+.bullets{margin:10px 0 0;padding-left:18px;color:#c9d5e1;font-size:13.8px;max-width:940px}
 .bullets li{margin:5px 0}
+
+/* ---------- 图表 / 表格 ---------- */
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  padding:16px 14px 10px;margin:14px 0 6px;overflow:hidden}
+.chart svg{width:100%;height:auto;display:block}
+/* 图内文字不接指针：名字压到点上也抢不走悬停（tooltip 都挂在 circle/rect 上） */
+.chart svg text{pointer-events:none}
+/* 温度计：CSS 色带（同一条 GAUGE_STOPS 色阶），刻度/读数都是 HTML 文字 */
+.chart.gauge{padding:14px 16px 12px}
+.gauge .gwrap{position:relative;padding:20px 1px 28px}
+.gauge .gk{position:absolute;left:1px;right:1px;top:0;height:14px}
+.gauge .gk span{position:absolute;top:0;font:500 12.6px/1 var(--mono);color:var(--dim);
+  letter-spacing:.04em;white-space:nowrap}
+.gbar{position:relative;height:16px;border-radius:8px;
+  background:linear-gradient(90deg,#2b3947 0%,#3d6b8f 25%,#7d8894 45%,#d29922 62%,#f0883e 80%,#f85149 100%)}
+.gbar i{position:absolute;top:-5px;width:3px;height:26px;border-radius:2px;background:#eef4fa;
+  box-shadow:0 0 0 3px #0e1116;transform:translateX(-1.5px)}
+.gauge .gval{position:absolute;bottom:0;font:600 15.6px/1 var(--mono);letter-spacing:-.01em;white-space:nowrap}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.4px}
+th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;
+  font-variant-numeric:tabular-nums}
+thead th{background:#12171e;color:var(--dim);font-size:12.6px;letter-spacing:.05em;text-transform:uppercase;
+  font-weight:600;position:sticky;top:var(--bar);z-index:5}
+tbody tr:hover{background:#171e28}
 .scroll{overflow-x:auto}
-.chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:16px 0 -2px}
-.chips .lbl{font:600 10.5px/1 var(--mono);color:var(--dim);letter-spacing:.06em;margin-right:2px}
-.chip{font:500 11.5px/1.5 inherit;padding:4px 11px;border:1px solid var(--line);border-radius:999px;background:#12171e;color:var(--dim);cursor:pointer;transition:.12s}
-.chip:hover{color:#c9d5e1;border-color:#31404f}
-.chip.on{background:#1f6feb1f;border-color:#1f6feb88;color:#79b8ff}
-.chip.on:hover{color:#a5ceff}
-#tip{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .1s;
-background:#1b2230f5;border:1px solid #33414f;border-radius:7px;padding:6px 9px;color:#e6edf3;
-font:12px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-box-shadow:0 8px 24px #00000066;white-space:pre-line;max-width:300px}
+.tag{font:600 12.6px/1 var(--mono);padding:4px 7px;border-radius:4px;margin-right:4px;white-space:nowrap}
+
+/* ---------- 控件 ---------- */
+.chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:14px 0 0}
+.chips .lbl{font:600 12.4px/1 var(--mono);color:var(--dim);letter-spacing:.06em;margin-right:2px}
+.chip{min-height:34px;font:500 13px/1.4 inherit;padding:7px 14px;border:1px solid var(--line);
+  border-radius:999px;background:#12171e;color:#9aa7b4;cursor:pointer;
+  transition:background .14s,border-color .14s,color .14s}
+.chip:hover{color:#e6edf3;border-color:#3d4a5c;background:#1a222c}
+.chip.on{background:#1f6feb22;border-color:#1f6feb99;color:#8ec5ff}
+.chip.on:hover{color:#b9dcff;border-color:#58a6ff}
 .tbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0 2px}
-.tbar input{font:12.5px/1.6 inherit;padding:5px 10px;border:1px solid var(--line);border-radius:7px;
-background:#12171e;color:var(--ink);outline:none;width:150px}
-.tbar input:focus{border-color:#1f6feb88}
-.tbar .cnt{font:600 11px/1 var(--mono);color:var(--dim);margin-left:auto}
+.tbar input{font:13.2px/1.6 inherit;height:34px;padding:0 11px;border:1px solid var(--line);border-radius:8px;
+  background:#12171e;color:var(--ink);outline:none;width:172px;transition:border-color .14s}
+.tbar input:hover{border-color:#3d4a5c}
+.tbar input:focus{border-color:#1f6febaa;box-shadow:0 0 0 3px #1f6feb22}
+.tbar input::placeholder{color:#8b949e}
+.tbar .cnt{font:600 12.4px/1 var(--mono);color:var(--dim);margin-left:auto;font-variant-numeric:tabular-nums}
 th.sortable{cursor:pointer;user-select:none}
 th.sortable:hover{color:#c9d5e1}
-th.sortable::after{content:'⇅';font-size:9px;opacity:.35;margin-left:5px}
+th.sortable::after{content:'⇅';font-size:11px;opacity:.35;margin-left:5px}
 th.asc::after{content:'▲';opacity:1;color:#58a6ff}
 th.desc::after{content:'▼';opacity:1;color:#58a6ff}
 [data-tip]{cursor:crosshair}
 [data-tip]:hover{filter:brightness(1.4)}
+#tip{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:#1b2230f5;border:1px solid #33414f;border-radius:7px;padding:6px 9px;color:#e6edf3;
+  font:12.6px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  box-shadow:0 6px 14px #00000080;white-space:pre-line;max-width:300px}
+
+/* ---------- 提示 / 折叠说明 ---------- */
+.warn{border:1px solid #4a3a14;background:#191505;border-radius:9px;padding:11px 14px;margin:14px 0;
+  font-size:13px;line-height:1.7;color:#e3d7bd}
+.warn b{color:#f0d9a0}
+details.fine{margin:10px 0 0;border:1px solid var(--line);border-radius:9px;background:#12171e}
+details.fine>summary{display:flex;align-items:center;gap:8px;padding:8px 13px;cursor:pointer;
+  font-size:12.8px;color:var(--dim);list-style:none;transition:color .14s}
+details.fine>summary::-webkit-details-marker{display:none}
+details.fine>summary::before{content:'';width:5px;height:5px;flex:none;
+  border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;
+  transform:rotate(-45deg);transition:transform .16s}
+details.fine[open]>summary::before{transform:rotate(45deg)}
+details.fine>summary:hover{color:#c9d5e1}
+details.fine .body{padding:0 14px 12px;color:#a9b6c3;font-size:13px;line-height:1.74}
+details.fine .body p{margin:6px 0}
+details.fine .body b{color:#dbe6f0}
 .figbox [data-fig]+[data-fig] .chart{margin-top:-2px}
-code{font-family:var(--mono);font-size:12.2px;background:#1c2430;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
-footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:12.4px}
-footer a,.kicker a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
-footer a:hover,.kicker a:hover{color:#a5ceff}
+
+footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);
+  color:var(--dim);font-size:12.8px}
+footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
+footer a:hover{color:#a5ceff}
+
+/* ---------- 响应式：侧栏 → 顶部横滑目录 ---------- */
+@media (min-width:1085px){.scroll{overflow:visible}}
+/* 图表都画在 1120 宽的虚拟画布上：屏幕窄到装不下就横向滑动，不把轴标压到 10px 以下。
+   温度计反过来——铺满整宽更好看，所以藏掉画布里的小字，用下面 .gauge-ends 的 HTML 文字顶上。 */
+@media (max-width:1349px){
+  .chart{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .chart svg{min-width:1030px}
+}
+@media (max-width:1084px){
+  .shell{display:block;padding:18px 18px 80px}
+  main{max-width:none}
+  .side{position:sticky;top:var(--bar);z-index:55;max-height:none;overflow:visible;
+    margin:0 -18px 20px;padding:9px 18px;background:#0e1116f2;
+    backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+  .side-card{display:none}
+  .date-line{display:block}
+  .toc{flex-direction:row;overflow-x:auto;gap:6px;padding:1px 0 3px;scrollbar-width:none}
+  .toc::-webkit-scrollbar{display:none}
+  .toc a{padding:5px 11px;border:1px solid var(--line);border-radius:999px;
+    background:#12171e;font-size:12.6px;white-space:nowrap}
+  .toc a i{width:auto}
+  .toc a.on{border-color:#1f6feb88;background:#1f6feb1f;color:#9ccbff}
+  .toc a.on::before{display:none}
+  h2{scroll-margin-top:calc(var(--bar) + 66px)}
+  thead th{top:calc(var(--bar) + 52px)}
+  .bar-in{padding:0 16px}
+}
+@media (max-width:640px){
+  h1{font-size:23px}
+  .btn{min-height:36px;padding:8px 13px;font-size:13px}
+  .btn svg{width:14px;height:14px}
+  /* 手机上先把位置让给日期：前一天/后一天带日期，「全部日期」只留图标，「最新」交给首页 */
+  .btn .lb{display:none}
+  .btn.pri{display:none}
+  .btn.dnav.off{display:none}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .card .v{font-size:20px}
+  .tbar input{width:100%}
+  .tbar .cnt{margin-left:0}
+  /* 宽表：横向滑动看全 */
+  .scroll{-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .scroll>table{min-width:880px}
+  #t54{min-width:1000px}
+  thead th{position:static}
+}
 """
 
 # 命令行参数在 import 时解析一次；OUT_PATH / SUMMARY_PATH 为 None 时沿用老行为
 _DAY_ARG, OUT_PATH, SUMMARY_PATH = parse_args(sys.argv[1:])
+
+
+def day_series():
+    """docs/ 里已经生成过页面的数据日（升序）。
+
+    只链真实存在的页面：顶栏的「前一天 / 后一天」不应该指向一个不存在或还没补的日期。
+    """
+    cands = [os.path.dirname(OUT_PATH) if OUT_PATH else os.path.join(_CWD0, "docs"),
+             os.path.join("..", "docs")]
+    for d in cands:
+        try:
+            names = os.listdir(d or ".")
+        except OSError:
+            continue
+        days = sorted(f[:8] for f in names
+                      if len(f) == 13 and f[:8].isdigit() and f.endswith(".html"))
+        if days:
+            return days
+    return []
+
+
+def nav_button(target, direction):
+    """前一天 / 后一天：没有相邻页时留一个禁用的占位，顶栏不因首尾页而错位"""
+    chev = "M15 5l-7 7 7 7" if direction == "prev" else "M9 5l7 7-7 7"
+    icon = f"<svg viewBox='0 0 24 24' aria-hidden='true'><path d='{chev}'/></svg>"
+    word = "前一天" if direction == "prev" else "后一天"
+    if not target:
+        return (f"<span class='btn dnav off'><span class='dd'>{'‹' if direction == 'prev' else '›'}</span>"
+                f"<span class='sr'>{word}（已到{'首' if direction == 'prev' else '末'}页）</span></span>")
+    label = f"<span class='dd'>{target[4:6]}-{target[6:]}</span>"
+    inner = icon + label if direction == "prev" else label + icon
+    return (f"<a class='btn dnav' href='{target}.html' rel='{direction}'"
+            f" title='{word} {target}'>{inner}<span class='sr'>{word}</span></a>")
 
 
 def main():
@@ -1039,7 +1490,7 @@ def main():
     bullets.append(
         f"名单中位 <b>{theme['median']:+.2f}%</b>（等权 {theme['mean']:+.2f}%），"
         f"沪深300 {bench300:+.2f}% → <b>超额 {excess:+.2f}pt</b>；创业板指 {bench_c50:+.2f}% → "
-        f"<b>{excess_c50:+.2f}pt</b>；{theme['up']} 涨 / {theme['down']} 跌，涨停 {theme['zt']} 家。")
+        f"<b>{excess_c50:+.2f}pt</b>；{theme['up']} 涨 / {theme['down']} 跌。")
     if not pd.isna(hk_med):
         who = (f"（{theme_hk['up']} 涨 / {theme_hk['down']} 跌）"
                if theme_hk.get("n") else "")
@@ -1102,6 +1553,12 @@ def main():
             probe_line = (f"名单 20 日中位 <b>{t20:+.1f}%</b>，所属 AI 板块中位（{len(sub_b)} 个、名单内 ≥3 家）"
                           f"<b>{b20:+.1f}%</b>，差 <b>{diff:+.1f}pt</b> — {tag}。")
 
+    # 量能倍数的口径摊开在 tooltip 里：今日成交额 / 前 20 日均
+    def amt_tip(m):
+        if pd.isna(m.get("amt_mult")) or pd.isna(m.get("amt_20d")):
+            return ""
+        return (f"量能 {m['amt_mult']:.2f}× = 今日 {m['amt']:.1f} 亿 / 前 20 日均 {m['amt_20d']:.1f} 亿")
+
     # ---- 异动表
     move_rows = ""
     for m in moves:
@@ -1114,14 +1571,21 @@ def main():
             verdict = ("独走" if (m["pct"] - bmed) > 2.5 else
                        "背离" if (m["pct"] - bmed) < -2.5 else "共振")
         move_rows += (
-            f"<tr><td><b>{esc(m['name'])}</b><div style='font-size:11px;color:#6e7681'>{esc(m['code'])}</div></td>"
-            f"<td><span style='color:{lay_c};font-size:12px'>{esc(SHORT.get(m['layer'], m['layer']))}</span></td>"
+            f"<tr><td><b>{esc(m['name'])}</b><div style='font-size:12.6px;color:#8b949e'>{esc(m['code'])}</div></td>"
+            f"<td><span style='color:{lay_c};font-size:12.6px'>{esc(SHORT.get(m['layer'], m['layer']))}</span>"
+            f"<div style='font-size:12.6px;color:#8b949e'>{esc(sec_cn(m.get('sector')))}</div></td>"
             f"<td style='text-align:right'>{pct(m['pct'], 2)}</td>"
-            f"<td>{esc(m['board'])}</td>"
-            f"<td style='text-align:right'>{pct(bmed, 1)} <span style='color:#6e7681;font-size:11px'>{verdict}</span></td>"
+            f"<td style='text-align:right' data-tip='{esc(m.get('board_tip', ''))}'>{pct(bmed, 1)} "
+            f"<span style='color:#8b949e;font-size:12.6px'>{verdict}</span></td>"
             f"<td style='text-align:right'>{num(m['turn'], 2, '%')}</td>"
-            f"<td style='text-align:right'>{num(m['amt_mult'], 2, '×')}</td>"
+            f"<td style='text-align:right' data-tip='{esc(amt_tip(m))}'>{num(m['amt_mult'], 2, '×')}</td>"
             f"<td>{tags}</td></tr>")
+
+    def quant_tip(r):
+        """全表里量能倍数的口径：今日成交额 / 前 20 日均"""
+        if pd.isna(r.amt_mult) or pd.isna(r.amt_20d):
+            return ""
+        return f"量能 {r.amt_mult:.2f}× = 今日 {r.amount_yi:.1f} 亿 / 前 20 日均 {r.amt_20d:.1f} 亿"
 
     # ---- 全表
     table_rows = ""
@@ -1133,16 +1597,16 @@ def main():
         table_rows += (
             f"<tr data-mkt='{r.market}' data-layer='{esc(r.ai_layer)}' data-key='{esc((str(r.name_cn) + str(r.code)).lower())}'>"
             f"<td><b>{esc(r.name_cn)}</b></td>"
-            f"<td><span style='color:{COLOR.get(r.ai_layer, '#8b949e')};font-size:12px'>{esc(SHORT.get(r.ai_layer, r.ai_layer))}</span>"
-            f"<div style='font-size:10.5px;color:#6e7681'>{esc(r.ai_sector)}</div></td>"
+            f"<td><span style='color:{COLOR.get(r.ai_layer, '#8b949e')};font-size:12.6px'>{esc(SHORT.get(r.ai_layer, r.ai_layer))}</span>"
+            f"<div style='font-size:12.6px;color:#8b949e'>{esc(sec_cn(r.ai_sector))}</div></td>"
             f"<td>{r.market}</td>"
             f"<td style='text-align:right'{ds(r.pct_chg)}>{pct(r.pct_chg, 2)}</td>"
             f"<td style='text-align:right'{ds(r.ret5)}>{pct(r.ret5, 1)}</td>"
             f"<td style='text-align:right'{ds(r.ret10)}>{pct(r.ret10, 1)}</td>"
             f"<td style='text-align:right'{ds(r.ret20)}>{pct(r.ret20, 1)}</td>"
-            f"<td style='text-align:right'{ds(r.amt_mult)}>{num(r.amt_mult, 2, '×')}</td>"
+            f"<td style='text-align:right'{ds(r.amt_mult)} data-tip='{quant_tip(r)}'>{num(r.amt_mult, 2, '×')}</td>"
             f"<td style='text-align:right'{ds(r.dist_hi60)}>{pct(r.dist_hi60, 0, sign=False)}</td>"
-            f"<td style='text-align:right'{ds(pe)}>{num(pe, 0, 'x')} <span style='color:#6e7681;font-size:10px'>{pe_lbl}</span></td>"
+            f"<td style='text-align:right'{ds(pe)}>{num(pe, 0, 'x')} <span style='color:#8b949e;font-size:12.6px'>{pe_lbl}</span></td>"
             f"<td style='text-align:right'{ds(r.mcap_yi)}>{num(r.mcap_yi, 0)}</td>"
             f"<td>{sparkline(r.spark, tip=sp_tip(r))}</td></tr>")
 
@@ -1179,11 +1643,11 @@ def main():
                 ser.append({"name": SHORT[l], "color": COLOR[l], "values": vals})
             if base == "abs":
                 ser.append({"name": "沪深300", "color": "#6e7681", "values": list(_rebase(bsub).values), "dash": True})
-                title = "层间强弱（等权净值，绝对涨跌口径）"
-                sub = f"各层内 A 股中位涨跌累乘；灰虚线 = 沪深300。{SPAN_LBL[span]}"
+                title = "层间强弱（绝对涨跌，等权净值）"
+                sub = f"灰虚线 = 沪深300　·　{SPAN_LBL[span]}"
             else:
-                title = "层间相对强弱（÷ 沪深300，起点 = 0%）"
-                sub = f"层净值 ÷ 沪深300 净值 − 1：0 上方 = 跑赢基准，下方 = 跑输。{SPAN_LBL[span]}"
+                title = "层间相对强弱（0 以上 = 跑赢沪深300）"
+                sub = f"层净值 ÷ 沪深300 净值 − 1　·　{SPAN_LBL[span]}"
             lay_figs.append((f"{base}_{span}", f"<div class='chart'>{line_chart(dslice, ser, title, sub, H=300)}</div>"))
     lay_switch = figbox(
         [("base", [("rel", "相对沪深300", True), ("abs", "绝对涨跌", False)], "口径"),
@@ -1213,9 +1677,9 @@ def main():
         den = float(rest.mean())
         return float(num) / den if den else float("nan")
 
-    q_spans = [("d", "今日", "今日成交额 / 其余日均", "今日中位涨跌", "动量 × 量能：今天谁在异动"),
-               ("5", "近 5 日", "近 5 日均额 / 此前均额", "5 日累计中位", "动量 × 量能：这一周谁在放量启动"),
-               ("20", "近 20 日", "近 20 日均额 / 此前均额", "20 日累计中位", "动量 × 量能：这一个月的主线是谁")]
+    q_spans = [("d", "今日", "今日成交额 / 其余日均", "今日中位涨跌", "量价：今天谁在异动"),
+               ("5", "近 5 日", "近 5 日均额 / 此前均额", "5 日累计中位", "量价：这一周谁在放量"),
+               ("20", "近 20 日", "近 20 日均额 / 此前均额", "20 日累计中位", "量价：这一个月的主线")]
     ycol = {"d": "med", "5": "r5", "20": "r20"}
     top_b = bdf[bdf.listed_n >= 1].nlargest(5, "amt") if not bdf.empty else pd.DataFrame()
     q_figs = []
@@ -1232,7 +1696,7 @@ def main():
                          "y": float(b.get(ycol[span], float("nan"))), "size": 40,
                          "n": int(b.get("n", 0))})
         foot = f"横轴：{xdesc}　纵轴：{ydesc}　气泡：家数"
-        sub = f"彩色 = 层，灰点 = 名单相关板块（成交额前 5）；右上 = 放量上涨，右下 = 放量下跌。{lbl}口径"
+        sub = f"灰点 = 相关板块（成交额前 5）　·　右上 放量上涨 / 右下 放量下跌　·　{lbl}口径"
         q_figs.append((span, f"<div class='chart'>{quadrant(rows, title, sub, foot=foot)}</div>"))
     q_switch = figbox([("win", [(s, l2, s == "d") for s, l2, *_ in q_spans], "窗口")], q_figs)
 
@@ -1261,6 +1725,7 @@ def main():
     ntm_n = int(a_panel.pe_ntm.notna().sum())
     ntm_hk = int(panel[panel.market == "HK"].pe_ntm.notna().sum())
     data_days = len(days)
+    day_iso = f"{day[:4]}-{day[4:6]}-{day[6:8]}"
     last_q = panel[panel.market == "HK"]
     retro_warn = ""
     quote_note = "最早一份快照（回溯补算）" if D.get("retro") else "不晚于数据日的最近一份快照"
@@ -1280,38 +1745,105 @@ def main():
             "涨跌中位仍可由 <code>data/hk/kline.csv</code> 还原，见顶部卡片。"
             "（历史日只有 <code>hk/kline.csv</code> 的日收益，市值与 PE 无快照不可回补。）</div>")
 
+    def mcard(v, label, rows, color=""):
+        """指标卡：一个主数字 + 一行标签 + 两行对齐的 k/v（宽度不够就上下两行，不会折得参差）"""
+        cells = []
+        for row in rows:
+            k, x = row[0], row[1]
+            tip = f" data-tip='{esc(row[2])}'" if len(row) > 2 and row[2] else ""
+            cells.append(f"<div{tip}><span>{k}</span><b>{x}</b></div>")
+        kv = "".join(cells)
+        style = f" style='color:{color}'" if color else ""
+        return (f"<div class='card'><div class='v'{style}>{v}</div>"
+                f"<div class='k'>{label}</div><div class='x'>{kv}</div></div>")
+
+    metrics = "".join([
+        mcard(f"{theme['median']:+.2f}%", "名单中位涨跌",
+              [("等权", f"{theme['mean']:+.2f}%"), ("加权", f"{theme['w']:+.2f}%")],
+              UP if theme["median"] > 0 else DOWN),
+        mcard(f"{theme['up']}/{theme['down']}", f"涨 / 跌（{theme['n']} 家 A 股）",
+              [("P90", f"{theme['p90']:+.1f}%",
+                "名单内涨幅的 90 分位：9 成个股落在它下面"),
+               ("P10", f"{theme['p10']:+.1f}%",
+                "名单内涨幅的 10 分位：9 成个股落在它上面"),
+               ("分化幅度", f"{theme['spread']:.1f}pt",
+                "P90 − P10：越大 = 越分化；普涨普跌时会收敛")]),
+        mcard(f"{theme['amount']:,.0f}<span class='x-u'> 亿</span>", "名单成交额",
+              [("占 A 股", f"{theme['amount'] / stats['amount'] * 100:.1f}%"),
+               ("全市场", f"{stats['amount']:,.0f} 亿")]),
+        mcard(pct(excess, 2), "超额 vs 沪深300",
+              [("沪深300", f"{bench300:+.2f}%"), ("创业板指口径", pct(excess_c50, 2))]),
+        mcard(pct(hk_med, 2), "港股 13 家中位",
+              [("恒生科技", f"{bench_hst:+.2f}%"), ("超额", pct(hk_excess, 2))]),
+        mcard(f"{stats['up'] / stats['n'] * 100:.0f}%", "全市场上涨占比",
+              [("涨停", f"{stats['zt']}"), ("跌停", f"{stats['dt']}")]),
+    ])
+
+    # ---- 页头 / 侧栏：标题只说结论，口径说明全部折进第 7 节
+    sc_col = score_ink(D["score"])
+    med_cls = "up" if theme["median"] > 0 else ("down" if theme["median"] < 0 else "")
+    if pd.isna(excess):
+        head_tail, exc_txt, exc_cls = "超额待算", "—", ""
+    else:
+        head_tail = f"名单{'跑赢' if excess > 0 else '跑输'}沪深300 {abs(excess):.2f}pt"
+        exc_txt = f"{excess:+.2f}pt"
+        exc_cls = "up" if excess > 0 else "down"
+    SECTIONS = [("s1", "温度计"), ("s2", "广度与分化"), ("s3", "轮动结构"),
+                ("s4", "异动榜"), ("s5", "估值"), ("s6", "全表"), ("s7", "口径")]
+    toc_items = []
+    for i, (sid, lbl) in enumerate(SECTIONS):
+        toc_items.append(f"<a href='#{sid}'{' class=\"on\"' if i == 0 else ''}><i>{i + 1}</i>{lbl}</a>")
+    toc_html = "".join(toc_items)
+
+    # ---- 顶栏日期切换：前一天 / 后一天 / 最新（当前页不自链）
+    series = sorted(set(day_series()) | {day})
+    i = series.index(day)
+    prev_day = series[i - 1] if i > 0 else None
+    next_day = series[i + 1] if i + 1 < len(series) else None
+    pos, total, latest_day = i + 1, len(series), series[-1]
+    ARROW = "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M4 12h14M12 6l6 6-6 6'/></svg>"
+    if day == latest_day:
+        latest_btn = (f"<span class='btn pri off' aria-current='page'>{ARROW}最新</span>")
+    else:
+        latest_btn = (f"<a class='btn pri' href='{latest_day}.html' "
+                      f"title='最新一期 {latest_day}'>{ARROW}最新</a>")
+
     html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI 主题每日复盘 · {day}</title><style>{CSS}</style></head><body><div class="wrap">
-<header>
-<div class="kicker">AI 主题每日复盘 · {day}　（{data_days} 个交易日的盘后包，20 日动量可用）　·　<a href="archive.html">全部日期</a>　·　<a href="index.html">最新</a></div>
-<h1>54 家名单当探针：主题今天几度、钱在哪个环节、名单还对不对</h1>
-<p class="sub">这 54 家不是组合，是<b>采样点</b>——用它读 AI 这条线在中国的温度、广度、轮动和与概念板块的背离。
-数据说明：A 股 41 家用通达信盘后包（收盘价、成交额、涨跌停），市值与 PE 用{quote_note}（{D['quote_day']}）；
-港股 13 家用腾讯（快照 + 前复权日线），前瞻 PE 用 Yahoo 卖方共识；基准用腾讯指数（沪深300 / 创业板指 / 恒生科技）；
-成交额占比 = 名单（41 家 A 股）成交额 / A 股全市场成交额（<b>不含港股</b>）；超额基准的选法见第 7 节。</p>
+<title>AI 主题每日复盘 · {day}</title><style>{CSS}</style></head><body>
+<div class="bar"><div class="bar-in">
+<a class="brand" href="index.html"><span class="dot"></span>AI 主题复盘</a>
+<span class="sp"></span>
+{nav_button(prev_day, 'prev')}
+{nav_button(next_day, 'next')}
+<a class="btn" href="archive.html" title="全部日期" aria-label="全部日期"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg><span class="lb">全部日期</span></a>
+{latest_btn}
+</div><div class="prog"><i id="prog"></i></div></div>
+<div class="shell">
+<aside class="side">
+<div class="side-card">
+<div class="sc"><span class="lb">数据日</span><span class="dt">{day_iso}</span></div>
+<div class="side-row"><span>期次</span><b>{pos} / {total}</b></div>
+<div class="side-row"><span>名单中位</span><b class="{med_cls}">{theme['median']:+.2f}%</b></div>
+<div class="side-row"><span>超额 vs 沪深300</span><b class="{exc_cls}">{exc_txt}</b></div>
+<div class="side-row"><span>温度计指数</span><b style="color:{sc_col}">{D['score']:.0f} · {D['mood']}</b></div>
+</div>
+<nav class="toc" id="toc">{toc_html}</nav>
+</aside>
+<main>
+<header class="page">
+<p class="date-line">数据日 {day_iso}　·　第 {pos} / {total} 期</p>
+<h1>{D['mood']} {D['score']:.0f} <span class="dim">·</span> {head_tail}</h1>
+<p class="standfirst">54 家名单当探针：读 AI 这条线的温度、广度、轮动与背离。不是组合，没有权重。</p>
 </header>
 {retro_warn}
 
-<div class="cards">
-<div class="card"><div class="v" style="color:{UP if theme['median'] > 0 else DOWN}">{theme['median']:+.2f}%</div>
-<div class="k">名单中位涨跌</div><div class="x">等权 {theme['mean']:+.2f}% · 市值加权 {theme['w']:+.2f}%</div></div>
-<div class="card"><div class="v">{theme['up']}/{theme['down']}</div><div class="k">涨 / 跌（{theme['n']} 家 A 股）</div>
-<div class="x">涨停 {theme['zt']} · P90−P10 {theme['spread']:.1f}pt</div></div>
-<div class="card"><div class="v">{theme['amount']:,.0f}<span style="font-size:13px;color:#8b949e"> 亿</span></div>
-<div class="k">名单成交额（41 家 A 股）</div><div class="x">占 A 股全市场 {theme['amount'] / stats['amount'] * 100:.1f}%（全市场 A 股 {stats['amount']:,.0f} 亿，不含港股）</div></div>
-<div class="card"><div class="v">{pct(excess, 2)}</div><div class="k">超额 vs 沪深300 / 创业板指</div>
-<div class="x">沪深300 {bench300:+.2f}% → {pct(excess, 2)}　·　创业板指 {bench_c50:+.2f}% → {pct(excess_c50, 2)}</div></div>
-<div class="card"><div class="v">{pct(hk_med, 2)}</div><div class="k">港股 13 家中位（vs 恒生科技）</div>
-<div class="x">恒生科技 {bench_hst:+.2f}% → 超额 {pct(hk_excess, 2)}</div></div>
-<div class="card"><div class="v">{stats['up'] / stats['n'] * 100:.0f}%</div><div class="k">全市场上涨家数占比</div>
-<div class="x">涨停 {stats['zt']} / 跌停 {stats['dt']} · 中位 {stats['median']:+.2f}%</div></div>
-</div>
+<div class="cards metrics">{metrics}</div>
 
-<h2><span class="n">1</span>主题温度计</h2>
-<div class="chart">{gauge(D['score'], D['mood'], gauge_tip)}</div>
-<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
-<div class="card"><div class="k">名单中位涨跌（今日 / 5日 / 20日）</div>
+<h2 id="s1"><span class="n">1</span>温度计</h2>
+{gauge(D['score'], D['mood'], gauge_tip)}
+<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(166px,1fr))">
+<div class="card"><div class="k">名单中位涨跌（今 / 5日 / 20日）</div>
 <div class="v" style="font-size:17px">{theme['median']:+.2f}% <span style="color:#8b949e">/</span>
 {pct(a_panel.ret5.median(), 1)} <span style="color:#8b949e">/</span> {pct(a_panel.ret20.median(), 1)}</div></div>
 <div class="card"><div class="k">量能倍数（名单 / 均值）</div>
@@ -1325,11 +1857,11 @@ def main():
 </div>
 <ul class="bullets">{"".join(f"<li>{b}</li>" for b in bullets)}</ul>
 
-<h2><span class="n">2</span>广度与分化：均值会骗人</h2>
+<h2 id="s2"><span class="n">2</span>广度与分化</h2>
 <div class="chart">{line_chart(days, [
     {"name": "名单中位(日涨跌)", "color": "#58a6ff", "values": [v for v in D['eq_pct'].values]},
     {"name": "全市场中位", "color": "#6e7681", "values": mkt_med_vals, "dash": True}],
-    "每日中位涨跌：名单 vs 全市场", "同一天两条线的差 = 主题相对强弱的日度节奏（点越靠上说明主题当天越抗跌）", H=260)}</div>
+    "每日中位涨跌：名单 vs 全市场", "两线之差 = 主题当天的相对强弱", H=260)}</div>
 {lay_switch}
 
 <div class="scroll"><table><thead><tr><th>层</th><th style="text-align:right">家数</th>
@@ -1338,55 +1870,76 @@ def main():
 <th style="text-align:right">PE_NTM中位</th><th style="text-align:right">成交额占比</th></tr></thead>
 <tbody>{layer_rows}</tbody></table></div>
 
-<h2><span class="n">3</span>结构轮动</h2>
-<div class="chart">{heatgrid(hrows, hcols, hvals, "层 × 时间（中位涨跌）", "左边三列是累计口径，右边三列是逐日；看哪一层在由弱转强、哪一层连续复仇失败", W=1120)}</div>
+<h2 id="s3"><span class="n">3</span>轮动结构</h2>
+<div class="chart">{heatgrid(hrows, hcols, hvals, "层 × 时间（中位涨跌）", "左三列累计，右三列逐日：看谁在由弱转强", W=1120)}</div>
 {q_switch}
 <p class="note">{probe_line}</p>
-<h2><span class="n">4</span>异动榜（不是排序，是解释）</h2>
-<div class="scroll"><table><thead><tr><th>个股</th><th>层</th><th style="text-align:right">涨跌</th><th>相关板块</th>
-<th style="text-align:right">板块中位</th><th style="text-align:right">换手率</th><th style="text-align:right">量能</th><th>标签</th></tr></thead>
+<h2 id="s4"><span class="n">4</span>异动榜</h2>
+<div class="scroll"><table><thead><tr><th>个股</th><th>层 / 细分</th><th style="text-align:right">涨跌</th>
+<th style="text-align:right">板块中位</th><th style="text-align:right">换手率</th><th style="text-align:right">量能</th><th style="width:1%">标签</th></tr></thead>
 <tbody>{move_rows or "<tr><td colspan='8' class='note'>今日没有触发异动阈值的个股（|σ|≥1.8、量能≥1.8×、涨停/跌停、新高/新低）</td></tr>"}</tbody></table></div>
-<p class="note">「独走 / 共振 / 背离」= 个股涨跌 − 相关板块中位涨跌，超过 ±2.5pt 才算独走或背离。
-「换手率」A 股用流通换手（行情接口口径），港股无流通盘数据，退化为成交额 / 总市值（口径偏小，只做同市场内比较）。</p>
+<details class="fine"><summary>标签怎么算</summary><div class="body">
+<p><b>板块中位</b> = 该股所属<b>全部</b> AI 概念板块当日中位的<b>均值</b>；每个板块的中位由成分股当日涨跌算出
+（<code>data/em_cons.csv</code> 的 12,729 条成分关系 × 通达信全 A 盘后包，含名单外成分）。悬停该格可看用了哪几个板块。</p>
+<p><b>独走 / 共振 / 背离</b> = 个股涨跌 − 板块中位：差 &gt; +2.5pt 记「独走」，&lt; −2.5pt 记「背离」，中间记「共振」。</p>
+<p><b>标签</b>：<code>|涨跌| / 60 日日波动 ≥ 1.8σ</code>、<code>量能 ≥ 1.8×</code>、<code>距 60 日高 &gt; −1%</code>、
+<code>距 250 日低 &lt; 3%</code>、涨停/跌停取行情字段——全部按当天数据算，阈值是代码里的常量。</p>
+<p>「换手率」A 股用流通换手（行情接口口径），港股无流通盘数据，退化为成交额 / 总市值（口径偏小，只做同市场内比较）。</p>
+</div></details>
 
-<h2><span class="n">5</span>全表（{len(panel)} 家）</h2>
-<p class="sub">点表头排序（再点一次反向），上面可以按市场 / 层筛，也可以搜名字或代码。</p>
+<h2 id="s5"><span class="n">5</span>估值</h2>
+<div class="chart">{dotplot(panel)}</div>
+<div class="chart">{scatter(panel)}</div>
+<details class="fine"><summary>读图说明：两张结构图怎么读</summary><div class="body">
+<p>这两张是<b>结构图</b>，不是买卖信号：上图看「同一层里谁被定了高价」，下图看「这个高价有没有增速兜底」。</p>
+<p>PEG 射线读法：<b>线下方 = 增速配得上估值，线上方 = 贵</b>；今天贴在最上方的三家（华虹 6.3、中芯 2.8、寒武纪 1.0 上下）就是「贵得有理由但也在透支」的位置。</p>
+<p>增速是 FY2/FY1 的预测利润比值，<b>低基数转正会把它放大到几百个百分点</b>（沐曦 2225%、芯原 554%，已贴右边界的 ▸ 标记），那种 PEG 看着便宜并不作数。</p>
+</div></details>
+
+
+
+<h2 id="s6"><span class="n">6</span>全表<span class="meta">{len(panel)} 家 · 点表头排序</span></h2>
 {t54_bar}
 <div class="scroll"><table id="t54"><thead><tr><th>公司</th><th>层 / 细分</th><th>市场</th><th style="text-align:right">今日</th>
 <th style="text-align:right">5日</th><th style="text-align:right">10日</th><th style="text-align:right">20日</th><th style="text-align:right">量能</th>
 <th style="text-align:right">距60日高</th><th style="text-align:right">PE</th><th style="text-align:right">市值(亿)</th><th data-nosort>40日</th></tr></thead>
 <tbody>{table_rows}</tbody></table></div>
-<p class="note">PE 优先用卖方共识 PE_NTM（A 股 {ntm_n}/{n_a} 家，共识快照 {D['cons_day']}；港股 {ntm_hk}/13 家，共识快照 {D['hk_cons_day']}），缺的退回 PE_TTM。
-NTM = w×FY1 + (1−w)×FY2，w = 距本财年结束剩余天数 / 365；港股按各公司财年（阿里/联想是 3 月年结）算，港股 EPS 多为人民币，
-按当日 CNYHKD 折成港元再比价，所以同一家会出现 NTM 与 Yahoo forwardPE（只取 FY1）的小差。
-「量能」= 当日成交额 / 前 20 日均；「距60日高」= 收盘 / 60 日最高 − 1（0% 即新高）；
-港股历史来自 {D['hk_hist_src']}（约 400 根，新股只到上市日），当日快照补最后一根；港股共识 3 天刷新一次，Yahoo 限速时沿用上一份。</p>
+<details class="fine"><summary>PE / 量能 / 距 60 日高 怎么算</summary><div class="body">
+<p>PE 优先用卖方共识 PE_NTM（A 股 {ntm_n}/{n_a} 家，共识快照 {D['cons_day']}；港股 {ntm_hk}/13 家，共识快照 {D['hk_cons_day']}），缺的退回 PE_TTM。</p>
+<p>NTM = w×FY1 + (1−w)×FY2，w = 距本财年结束剩余天数 / 365；港股按各公司财年（阿里/联想是 3 月年结）算，港股 EPS 多为人民币，
+按当日 CNYHKD 折成港元再比价，所以同一家会出现 NTM 与 Yahoo forwardPE（只取 FY1）的小差。</p>
+<p>「量能」= 当日成交额 / 前 20 日均；「距60日高」= 收盘 / 60 日最高 − 1（0% 即新高）。</p>
+<p>港股历史来自 {D['hk_hist_src']}（约 400 根，新股只到上市日），当日快照补最后一根；港股共识 3 天刷新一次，Yahoo 限速时沿用上一份。</p>
+</div></details>
 
-<h2><span class="n">6</span>估值：贵不贵 × 增速配不配</h2>
-<div class="chart">{dotplot(panel)}</div>
-<div class="chart">{scatter(panel)}</div>
-<p class="note">这两张是<b>结构图</b>，不是买卖信号：上图看「同一层里谁被定了高价」，下图看「这个高价有没有增速兜底」。
-PEG 射线读法：<b>线下方 = 增速配得上估值，线上方 = 贵</b>；今天贴在最上方的三家（华虹 6.3、中芯 2.8、寒武纪 1.0 上下）就是「贵得有理由但也在透支」的位置。
-增速是 FY2/FY1 的预测利润比值，<b>低基数转正会把它放大到几百个百分点</b>（沐曦 2225%、芯原 554%，已贴右边界的 ▸ 标记），那种 PEG 看着便宜并不作数。</p>
-
-
-
-<h2><span class="n">7</span>口径与积累</h2>
-<div class="warn"><b>口径：</b>① 名单 = GS 三张表去重 54 家（A 41 / HK 13），<b>不构成组合</b>，页面里没有权重和归因；
-② A 股涨跌与成交额来自通达信官网盘后包（当日收盘口径，与交易所一致）；港股快照来自腾讯，5/10/20 日、量能与 40 日走势来自腾讯前复权日线；
-③ 港股 13 家前瞻 PE 来自 Yahoo 卖方共识（覆盖 1–32 家机构，小票只有 1–4 家，参考度弱于 A 股的 20+ 家）；
-分层 PE 打点图里港股是空心点（口径相同、只标记市场），PEG 散点图暂不含港股——Yahoo 那份共识没有 FY1/FY2 明细，算不出增速；
-④ 板块口径 = 77 个 AI 相关东财概念板块（data/em_cons.csv，12,729 条成分关系，含截断板块），板块中位是成分等权中位；
-⑤ 温度分数 = 中位涨跌 + 广度 + 量能 + 创新高家数的加权，0–100，仅用于横向比较，不是预测。<br>
-<b>⑥ 基准口径：</b>名单中位 / 涨停 / 新高 / 成交额占比都是<b> 41 家 A 股</b>口径，分母也是 A 股全市场（不含港股）；
+<h2 id="s7"><span class="n">7</span>口径<span class="meta">需要时展开</span></h2>
+<details class="fine"><summary>数据来源</summary><div class="body">
+<p>这 54 家不是组合，是<b>采样点</b>——用它读 AI 这条线在中国的温度、广度、轮动和与概念板块的背离。</p>
+<p>A 股 41 家用通达信盘后包（收盘价、成交额、涨跌停），市值与 PE 用{quote_note}（{D['quote_day']}）；
+港股 13 家用腾讯（快照 + 前复权日线），前瞻 PE 用 Yahoo 卖方共识；基准用腾讯指数（沪深300 / 创业板指 / 恒生科技）；
+成交额占比 = 名单（41 家 A 股）成交额 / A 股全市场成交额（<b>不含港股</b>）。</p>
+</div></details>
+<details class="fine"><summary>口径与基准（6 条）</summary><div class="body">
+<p><b>① 名单：</b>GS 三张表去重 54 家（A 41 / HK 13），<b>不构成组合</b>，页面里没有权重和归因。</p>
+<p><b>② A 股行情：</b>涨跌与成交额来自通达信官网盘后包（当日收盘口径，与交易所一致）；港股快照来自腾讯，5/10/20 日、量能与 40 日走势来自 {D['hk_hist_src']} 前复权日线。</p>
+<p><b>③ 港股 PE：</b>13 家前瞻 PE 来自 Yahoo 卖方共识（覆盖 1–32 家机构，小票只有 1–4 家，参考度弱于 A 股的 20+ 家）；
+分层 PE 打点图里港股是空心点（口径相同、只标记市场），PEG 散点图暂不含港股——Yahoo 那份共识没有 FY1/FY2 明细，算不出增速。</p>
+<p><b>④ 板块：</b>口径 = AI 相关东财概念板块（<code>data/em_cons.csv</code>，12,729 条成分关系），每个板块当天的中位 = 成分股
+（全 A，含名单外）当日涨跌的<b>中位数</b>；异动榜的「板块中位」= 一只股票所属全部板块中位的<b>均值</b>。</p>
+<p><b>⑤ 温度分数：</b>= 中位涨跌 + 广度 + 量能 + 创新高家数的加权，0–100，仅用于横向比较，不是预测。</p>
+<p><b>⑥ 基准口径：</b>名单中位 / 新高 / 成交额占比都是<b> 41 家 A 股</b>口径，分母也是 A 股全市场（不含港股）；
 沪深300 只是「A 股宽基 beta」参考——这份名单 44% 是科创板/创业板成长股、没有银行地产，
 跟沪深300 结构错配，超额长期会带风格偏移，所以另给<b>创业板指</b>（A 股成长）作为同风格对照。
 港股 13 家用<b>恒生科技</b>（腾讯、阿里、小米、联想、地平线等都是成分）做同市场对照；
-MSCI China 拿不到（腾讯行情不提供该指数），且它是全市场市值加权（含金融地产），换它并不解决错配。</div>
-<p class="note">积累：每跑一次 <code>python scripts/theme_data.py all</code> 就多一天盘后包与 K 线；
-动量窗口（5/10/{data_days - 1} 日）随积累自动变长。<br>
-生成命令：<code>python scripts/build_gs50_dashboard.py {day}</code>　·　数据：<code>data/mkt/</code>、<code>data/quote/</code>、<code>data/kline/</code></p>
-<footer>AI 主题每日复盘 · 生成于 {pd.Timestamp.now():%Y-%m-%d %H:%M} · 数据日 {day}　·　<a href="archive.html">历史归档</a>　·　<a href="index.html">最新一期</a></footer>
+MSCI China 拿不到（腾讯行情不提供该指数），且它是全市场市值加权（含金融地产），换它并不解决错配。</p>
+</div></details>
+<details class="fine"><summary>积累与生成</summary><div class="body">
+<p>积累：每跑一次 <code>python scripts/theme_data.py all</code> 就多一天盘后包与 K 线；
+动量窗口（5/10/{data_days - 1} 日）随积累自动变长。</p>
+<p>生成命令：<code>python scripts/build_gs50_dashboard.py {day}</code>　·　数据：<code>data/mkt/</code>、<code>data/quote/</code>、<code>data/kline/</code></p>
+</div></details>
+<footer>AI 主题每日复盘 · 生成于 {pd.Timestamp.now():%Y-%m-%d %H:%M} · 数据日 {day}　·　<a href="index.html">首页</a>　·　<a href="archive.html">历史归档</a></footer>
+</main>
 </div>
 <div id="tip"></div>
 {SWITCHER_JS}

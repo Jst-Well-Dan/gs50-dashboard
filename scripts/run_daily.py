@@ -12,19 +12,20 @@
     1b build_hk_kline.py <day>         港股 13 家日线收益长表（归档页的港股中位靠它，5 天内不重拉）
     2 fetch_consensus.py <day>         A 股卖方共识 → PE_NTM（tushare report_rc，逐股，慢）
     3 build_gs50_dashboard.py <day>    → docs/<day>.html（+ docs/data/<day>.json 摘要）
-    4 build_archive.py                 → docs/archive.html（历史归档页）+ docs/index.html（跳最新）
+    4 build_archive.py                 → docs/archive.html（历史归档页）+ docs/index.html（首页门厅）
 
 输出（全部静态，GitHub Pages 源目录 = docs/）：
-    docs/<day>.html          每天一份，永不覆盖 → 可永久引用某一天
-    docs/index.html          跳到最新一期（每次运行重写）
+    docs/<day>.html          每天一份，永不覆盖 → 可永久引用某一天（顶栏带前一天/后一天）
+    docs/index.html          首页门厅：最新一期结论 + 读数 + 温度史 + 入口（每次运行重写，不自动跳）
     docs/archive.html        温度/中位趋势 + 逐日表 + 到每天页面的链接
-    docs/gs50_dashboard.html 永远是最新一期（本地双击看，也兼容老链接）
+    docs/gs50_dashboard.html 已退役：只留一个跳到 index.html 的壳（兼容老链接 / 本地双击）
     docs/data/<day>.json     归档页用的每日摘要（<1 KB）
+
+    python scripts/run_daily.py --rebuild --all   # 不抓数，把全部日期页按当前模板重出一遍
 """
 
 import glob
 import os
-import shutil
 import subprocess
 import sys
 
@@ -35,17 +36,17 @@ PY = sys.executable
 BUILD = os.path.join("scripts", "build_gs50_dashboard.py")
 ARCHIVE = os.path.join("scripts", "build_archive.py")
 
-INDEX_TPL = """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+ALIAS_TPL = """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI 主题每日复盘 · 最新（{day}）</title>
-<meta http-equiv="refresh" content="0; url={day}.html">
-<link rel="canonical" href="{day}.html">
+<title>AI 主题每日复盘 · 首页</title>
+<meta http-equiv="refresh" content="0; url=index.html">
+<link rel="canonical" href="index.html">
 <style>body{{margin:0;background:#0e1116;color:#e6edf3;
 font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}}
 .wrap{{max-width:640px;margin:18vh auto;padding:0 26px}}a{{color:#58a6ff}}</style>
-<script>location.replace("{day}.html");</script></head>
-<body><div class="wrap"><p>正在打开最新一期（{day}）……</p>
-<p>没跳转的话点这里：<a href="{day}.html">数据日 {day}</a>　·　<a href="archive.html">历史归档</a></p></div></body></html>
+<script>location.replace("index.html");</script></head>
+<body><div class="wrap"><p><code>gs50_dashboard.html</code> 已并入首页——入口只有 <code>index.html</code> 一个。</p>
+<p>没跳转的话点这里：<a href="index.html">首页</a>　·　<a href="{day}.html">数据日 {day}</a></p></div></body></html>
 """
 
 
@@ -76,11 +77,12 @@ def build_page(day, allow_fail=False):
                allow_fail=allow_fail)
 
 
-def write_index(day):
-    path = os.path.join(DOCS, "index.html")
+def write_alias(day):
+    """gs50_dashboard.html 退役后只留一个跳首页的壳：老链接/书签不断，但不再冒充第二个 dashboard"""
+    path = os.path.join(DOCS, "gs50_dashboard.html")
     with open(path, "w", encoding="utf-8", newline="") as fh:
-        fh.write(INDEX_TPL.format(day=day))
-    print(f"写出 {path} → {day}.html")
+        fh.write(ALIAS_TPL.format(day=day))
+    print(f"写出 {path} → 跳 index.html（gs50_dashboard.html 已退役）")
 
 
 def main():
@@ -117,14 +119,15 @@ def main():
 
     os.makedirs(os.path.join(DOCS, "data"), exist_ok=True)
     build_page(target, allow_fail=False)
-    # 老链接 / 本地双击的固定名：内容与 docs/<target>.html 完全一致，git 里是同一个 blob，不额外占空间
-    shutil.copyfile(os.path.join(DOCS, f"{target}.html"),
-                    os.path.join(DOCS, "gs50_dashboard.html"))
+    write_alias(target)
 
-    # 3/4 补齐历史：某天漏跑了（或第一次部署）就按当时口径重算，已存在的不动
-    missing = [d for d in all_days()
-               if not os.path.exists(os.path.join(DOCS, f"{d}.html"))
-               or not os.path.exists(os.path.join(DOCS, "data", f"{d}.json"))]
+    # 3/4 补齐历史：某天漏跑了（或第一次部署）就按当时口径重算，已存在的不动；--all 强制全部重出
+    if "--all" in flags:
+        missing = all_days()
+    else:
+        missing = [d for d in all_days()
+                   if not os.path.exists(os.path.join(DOCS, f"{d}.html"))
+                   or not os.path.exists(os.path.join(DOCS, "data", f"{d}.json"))]
     if "--no-backfill" in flags:
         if missing:
             print(f"\n=== 3/4 补齐历史（--no-backfill 跳过，缺 {len(missing)} 天）===", flush=True)
@@ -136,11 +139,11 @@ def main():
             print(f"--- [{i}/{len(missing)}] {d}", flush=True)
             build_page(d, allow_fail=True)
 
-    # 4/4 归档页 + 最新跳转
-    write_index(target)
-    run("4/4 历史归档页", [ARCHIVE], allow_fail=False)
-    print(f"\n完成 → {os.path.join(DOCS, 'index.html')}（最新）· "
-          f"{os.path.join(DOCS, 'archive.html')}（归档）")
+    # 4/4 归档页 + 首页门厅（两页都由 build_archive.py 从 docs/data/*.json 汇总）
+    run("4/4 归档页 + 首页", [ARCHIVE], allow_fail=False)
+    print(f"\n完成 → {os.path.join(DOCS, 'index.html')}（首页）· "
+          f"{os.path.join(DOCS, 'archive.html')}（归档）· "
+          f"{os.path.join(DOCS, f'{target}.html')}（最新一期）")
 
 
 if __name__ == "__main__":

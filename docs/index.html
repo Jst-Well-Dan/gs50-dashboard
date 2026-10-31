@@ -1,11 +1,234 @@
 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI 主题每日复盘 · 最新（20261029）</title>
-<meta http-equiv="refresh" content="0; url=20261029.html">
-<link rel="canonical" href="20261029.html">
-<style>body{margin:0;background:#0e1116;color:#e6edf3;
-font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-.wrap{max-width:640px;margin:18vh auto;padding:0 26px}a{color:#58a6ff}</style>
-<script>location.replace("20261029.html");</script></head>
-<body><div class="wrap"><p>正在打开最新一期（20261029）……</p>
-<p>没跳转的话点这里：<a href="20261029.html">数据日 20261029</a>　·　<a href="archive.html">历史归档</a></p></div></body></html>
+<title>AI 主题每日复盘 · 首页（最新 2026-10-29）</title>
+<style>
+:root{--bg:#0e1116;--panel:#161b22;--line:#232b36;--ink:#e6edf3;--dim:#8b949e;
+--up:#f85149;--down:#3fb950;--accent:#58a6ff;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 26px 90px}
+.kicker{font:600 12.4px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+.kicker a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
+h1{font-size:27px;margin:0 0 8px;letter-spacing:-.01em}
+.sub{color:var(--dim);font-size:13.9px;margin:0;max-width:86ch}
+header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:11px;margin:20px 0 6px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+.card .v{font:600 24px/1.2 var(--mono)}
+.card .k{color:var(--dim);font-size:12.6px;margin-top:5px}
+.card .x{color:var(--dim);font-size:12.6px;margin-top:2px;font-family:var(--mono)}
+h2{font-size:18px;margin:38px 0 10px;display:flex;gap:9px;align-items:baseline}
+h2 .n{font:600 12.4px/1 var(--mono);color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:4px 7px}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px 14px 10px;margin:14px 0 6px;overflow:hidden}
+.chart svg{width:100%;height:auto;display:block}
+/* 图内文字不接指针：名字压到点上也抢不走悬停 */
+.chart svg text{pointer-events:none}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.4px}
+th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+thead th{background:#12171e;color:var(--dim);font-size:12.6px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;
+  position:sticky;top:0;z-index:4}
+tbody tr:hover{background:#171e28}
+td a{color:var(--accent);text-decoration:none;font-family:var(--mono)}
+td a:hover{color:#a5ceff;text-decoration:underline}
+.note{color:var(--dim);font-size:12.8px;margin:9px 0 0}
+.na{color:#4d5866}
+/* ---------- 逐日一览：按月折叠 + 月份跳转条 ---------- */
+.months{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 12px}
+.months a{font:500 12.8px/1 var(--mono);padding:8px 12px;border:1px solid var(--line);border-radius:9px;
+  background:#12171e;color:#c9d5e1;text-decoration:none;transition:background .14s,border-color .14s,color .14s}
+.months a:hover{background:#1c2430;border-color:#3d4a5c;color:#fff}
+.months a.on{border-color:#1f6feb88;background:#1f6feb1f;color:#9ccbff}
+details.mon{border-bottom:1px solid var(--line);scroll-margin-top:12px}
+details.mon>summary{display:flex;align-items:baseline;gap:11px;padding:12px 2px;cursor:pointer;
+  list-style:none;font-size:13.6px;color:#dbe6f0;transition:color .14s}
+details.mon>summary::-webkit-details-marker{display:none}
+details.mon>summary::before{content:'';width:5px;height:5px;flex:none;margin-top:7px;
+  border-right:1.6px solid #6e7681;border-bottom:1.6px solid #6e7681;
+  transform:rotate(-45deg);transition:transform .16s}
+details.mon[open]>summary::before{transform:rotate(45deg)}
+details.mon>summary:hover{color:#fff}
+details.mon>summary .m{font:600 13.4px/1 var(--mono);color:#e6edf3;letter-spacing:-.01em}
+details.mon>summary .s{font:500 12.6px/1 var(--mono);color:var(--dim)}
+details.mon[open]>summary{border-bottom:1px solid var(--line)}
+details.mon table{margin:0}
+.scroll{overflow-x:auto}
+.scroll table{min-width:1120px}
+code{font-family:var(--mono);font-size:12.6px;background:#1c2430;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+#tip{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .1s;
+background:#1b2230f5;border:1px solid #33414f;border-radius:7px;padding:6px 9px;color:#e6edf3;
+font:12.6px/1.55 inherit;box-shadow:0 6px 14px #00000080;white-space:pre-line;max-width:300px}
+[data-tip]{cursor:crosshair}
+[data-tip]:hover{filter:brightness(1.4)}
+footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:12.8px}
+footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
+/* 表头吸顶：只有在 .scroll 不自己当滚动容器时才真正贴着窗口（所以就放在 .scroll 之后） */
+@media (min-width:1100px){.scroll{overflow:visible}}
+/* 两张趋势图都是 1120 宽的虚拟画布：窗口窄到 <1240 就横向滑动，保住轴标字号 */
+@media (max-width:1239px){
+  .chart{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .chart svg{min-width:1030px}
+}
+
+/* ---------- 门厅 index.html：入口页，不是跳转壳 ---------- */
+.bar{position:sticky;top:0;z-index:60;padding:7px 0;background:#0e1116e6;
+  backdrop-filter:blur(14px) saturate(1.25);border-bottom:1px solid var(--line)}
+.bar-in{max-width:1046px;margin:0 auto;height:44px;display:flex;align-items:center;gap:9px;padding:0 25px}
+.brand{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;letter-spacing:.01em;
+  white-space:nowrap;color:var(--ink);text-decoration:none}
+.brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);outline:1px solid #58a6ff59;outline-offset:2px}
+.bar .sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:9px 14px;border:1px solid #2b3644;
+  border-radius:9px;background:#161b22;color:#c9d5e1;font:500 13.2px/1 inherit;text-decoration:none;
+  white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
+.btn:hover{background:#1c2430;border-color:#3d4a5c;color:#fff}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.hwrap{max-width:1046px;margin:0 auto;padding:0 25px 84px}
+.hhead{padding:54px 0 30px;border-bottom:1px solid var(--line)}
+.hdat{margin:0 0 20px;font:500 12.8px/1.6 var(--mono);color:var(--dim);
+  letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.hdat b{color:#c9d5e1;font-weight:600}
+.hdat .div{padding:0 .55em;color:#39434f}
+h1.h1{margin:0 0 14px;font-size:clamp(27px,4.2vw,44px);line-height:1.16;letter-spacing:-.028em;
+  font-weight:600;text-wrap:balance}
+h1.h1 .sep{color:#39434f;font-weight:400;padding:0 .1em}
+h1.h1 .cl{display:inline-block}
+h1.h1 .pt{color:var(--down);font-variant-numeric:tabular-nums}
+h1.h1 .pt.up{color:var(--up)}
+.hsub{margin:0;max-width:60ch;color:var(--dim);font-size:14.6px;line-height:1.72}
+.hact{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:26px}
+.go{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 19px;border-radius:11px;
+  background:#123050;border:1px solid #1f6feb7a;color:#cfe6ff;font:600 14px/1 inherit;text-decoration:none;
+  transition:background .16s,border-color .16s,color .16s}
+.go:hover{background:#173d63;border-color:#58a6ffaa;color:#fff}
+.go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;transition:transform .18s cubic-bezier(.22,1,.36,1)}
+.go:hover svg{transform:translateX(3px)}
+.more{color:#9ccbff;font-size:13.8px;text-decoration:none;border-bottom:1px solid #58a6ff44;padding-bottom:1px}
+.more:hover{color:#dcefff;border-bottom-color:#58a6ff}
+.read{display:grid;grid-template-columns:repeat(4,1fr);margin:0;border-bottom:1px solid var(--line)}
+.read>div{padding:19px 20px 21px 0}
+.read>div+div{padding-left:20px;border-left:1px solid var(--line)}
+.read dt{font:600 12.4px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.read dd{margin:10px 0 0;font:600 24px/1.1 var(--mono);color:#e6edf3;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.read dd i{display:block;margin-top:6px;font:500 12.6px/1.45 var(--mono);font-style:normal;
+  letter-spacing:.03em;color:var(--dim)}
+.read dd.up{color:var(--up)}
+.read dd.down{color:var(--down)}
+.hsec{padding-top:46px}
+.hsec h2{margin:0 0 15px;font-size:18px;font-weight:600;letter-spacing:-.005em;
+  display:flex;align-items:baseline;justify-content:space-between;gap:14px;color:#e6edf3}
+.hsec h2 a{font:500 12.8px/1 var(--mono);color:var(--accent);text-decoration:none;
+  border-bottom:1px solid #58a6ff44;letter-spacing:0}
+.hsec h2 a:hover{color:#a5ceff}
+.recent{list-style:none;margin:0;padding:0}
+.recent li{border-bottom:1px solid var(--line)}
+.recent li+li{border-top:1px solid var(--line)}
+.recent a{display:grid;grid-template-columns:92px minmax(0,1fr) 84px 20px;align-items:center;gap:14px;
+  padding:13px 4px 13px 0;text-decoration:none;color:inherit;transition:background .14s}
+.recent a:hover{background:#161b22}
+.recent .d{font:500 13.4px/1 var(--mono);color:#c9d5e1;font-variant-numeric:tabular-nums}
+.recent .m{font-size:14px;font-weight:600;display:flex;align-items:baseline;gap:8px;min-width:0}
+.recent .m small{font:500 12.6px/1 var(--mono);color:var(--dim);font-weight:500;white-space:nowrap}
+.recent .v{font:600 13.6px/1 var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.recent .arw{color:#39434f;text-align:right;font:400 15px/1 var(--mono);transition:color .14s,transform .14s}
+.recent a:hover .arw{color:var(--accent);transform:translateX(3px)}
+.chart{animation:hubin .6s cubic-bezier(.22,1,.36,1) both}
+@keyframes hubin{from{transform:translateY(8px)}to{transform:none}}
+.chart svg circle.pk{animation:hubpulse 1.6s cubic-bezier(.22,1,.36,1) .7s 2}
+@keyframes hubpulse{0%,100%{r:4.4}48%{r:7.4}}
+@media (prefers-reduced-motion:reduce){
+  .chart,.chart svg circle.pk{animation:none}
+  .go svg,.recent .arw{transition:none}
+}
+@media (max-width:620px){
+  /* 窄屏：两个分句各自成行，绝不在「名单跑输」和「沪深300」之间断开 */
+  h1.h1 .cl{display:block}
+  h1.h1 .sep{display:none}
+}
+/* 温度史是 1120 宽的虚拟画布：窗口窄到 <1240 就横向滑动，保住轴标字号 */
+@media (max-width:1239px){
+  .chart{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .chart svg{min-width:1030px}
+}
+@media (max-width:760px){
+  .hhead{padding:34px 0 24px}
+  .read{grid-template-columns:1fr 1fr}
+  .read>div{padding:15px 14px 17px 0;border-left:0}
+  .read>div+div{padding-left:0}
+  .read>div:nth-child(even){padding-left:16px;border-left:1px solid var(--line)}
+  .read>div:nth-child(n+3){border-top:1px solid var(--line)}
+  .read dd{font-size:21px}
+  .chart{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  .recent a{grid-template-columns:74px minmax(0,1fr) 68px;gap:10px;padding:12px 2px 12px 0}
+  .recent .exc,.recent .arw{display:none}  .hact{gap:16px}
+}
+</style></head><body>
+<div class="bar"><div class="bar-in">
+<a class="brand" href="index.html"><span class="dot"></span>AI 主题复盘</a>
+<span class="sp"></span>
+<a class="btn" href="archive.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg>全部 37 期</a>
+</div></div>
+<div class="hwrap">
+<header class="hhead">
+<p class="hdat">数据日 <b>2026-10-29</b><span class="div">·</span>第 <b>37</b> / 37 期
+<span class="div">·</span>今日</p>
+<h1 class="h1"><span class='cl'>冰点 17</span><span class='sep'>·</span><span class='cl'>名单跑输沪深300 <span class='pt'>3.50pt</span></span></h1>
+<p class="hsub">54 家名单当探针：读 AI 这条线的温度、广度、轮动与背离。不是组合，没有权重。
+每天盘后出一次，<b>2026-10-29.html</b> 就是那天的快照，后面重跑也不会改它。</p>
+<div class="hact">
+<a class="go" href="20261029.html">进入本期复盘
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M12 6l6 6-6 6"/></svg></a>
+<a class="more" href="archive.html">看全部 37 期 →</a>
+</div>
+</header>
+
+<dl class="read">
+<div><dt>温度计</dt><dd>17<i>冰点 · 0–100 加权分</i></dd></div>
+<div><dt>名单 A 股中位</dt><dd class="down">-4.53%
+<i>2 涨 / 39 跌</i></dd></div>
+<div><dt>超额 vs 沪深300</dt><dd class="down">-3.50pt
+<i>沪深300 -1.03%</i></dd></div>
+<div><dt>占 A 股成交额</dt><dd>10.4%
+<i>1,640 亿 · 量能 90%</i></dd></div>
+</dl>
+
+<section class="hsec">
+<h2>温度史</h2>
+<div class="chart"><svg viewBox='0 0 1000 210' role='img'><line x1='46' y1='139.5' x2='984' y2='139.5' stroke='#3fb95033' stroke-dasharray='3 4'/><text x='38' y='143.5' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>25</text><line x1='46' y1='79.6' x2='984' y2='79.6' stroke='#d2992233' stroke-dasharray='3 4'/><text x='38' y='83.6' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>62</text><line x1='46' y1='50.4' x2='984' y2='50.4' stroke='#f8514933' stroke-dasharray='3 4'/><text x='38' y='54.4' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>80</text><polyline points='46.0,131.2 72.1,122.7 98.1,103.5 124.2,125.6 150.2,68.5 176.3,121.9 202.3,104.0 228.4,119.2 254.4,114.3 280.5,125.3 306.6,97.9 332.6,69.1 358.7,108.2 384.7,69.5 410.8,89.7 436.8,99.6 462.9,110.9 488.9,140.5 515.0,152.6 541.1,96.2 567.1,128.5 593.2,139.9 619.2,114.1 645.3,133.7 671.3,105.0 697.4,144.6 723.4,143.8 749.5,96.6 775.6,99.9 801.6,97.1 827.7,107.0 853.7,148.3 879.8,57.6 905.8,135.9 931.9,140.7 957.9,53.7 984.0,152.7' fill='none' stroke='#58a6ff' stroke-width='1.8' stroke-linejoin='round'/><circle cx='46.0' cy='131.2' r='11' fill='transparent' data-tip='2026-09-01　温度 30 偏冷&#10;A 股中位 -2.21%　7/34 涨跌'/><circle cx='46.0' cy='131.2' r='4.4' fill='#58a6ff' data-tip='2026-09-01　温度 30 偏冷&#10;A 股中位 -2.21%　7/34 涨跌'/><circle cx='72.1' cy='122.7' r='11' fill='transparent' data-tip='2026-09-02　温度 35 偏冷&#10;A 股中位 -1.38%　10/31 涨跌'/><circle cx='72.1' cy='122.7' r='4.4' fill='#58a6ff' data-tip='2026-09-02　温度 35 偏冷&#10;A 股中位 -1.38%　10/31 涨跌'/><circle cx='98.1' cy='103.5' r='11' fill='transparent' data-tip='2026-09-03　温度 47 常温&#10;A 股中位 -0.06%　18/22 涨跌'/><circle cx='98.1' cy='103.5' r='4.4' fill='#58a6ff' data-tip='2026-09-03　温度 47 常温&#10;A 股中位 -0.06%　18/22 涨跌'/><circle cx='124.2' cy='125.6' r='11' fill='transparent' data-tip='2026-09-04　温度 34 偏冷&#10;A 股中位 -2.20%　12/29 涨跌'/><circle cx='124.2' cy='125.6' r='4.4' fill='#58a6ff' data-tip='2026-09-04　温度 34 偏冷&#10;A 股中位 -2.20%　12/29 涨跌'/><circle cx='150.2' cy='68.5' r='11' fill='transparent' data-tip='2026-09-07　温度 69 升温&#10;A 股中位 +2.46%　31/10 涨跌'/><circle cx='150.2' cy='68.5' r='4.4' fill='#58a6ff' data-tip='2026-09-07　温度 69 升温&#10;A 股中位 +2.46%　31/10 涨跌'/><circle cx='176.3' cy='121.9' r='11' fill='transparent' data-tip='2026-09-08　温度 36 偏冷&#10;A 股中位 -1.49%　10/31 涨跌'/><circle cx='176.3' cy='121.9' r='4.4' fill='#58a6ff' data-tip='2026-09-08　温度 36 偏冷&#10;A 股中位 -1.49%　10/31 涨跌'/><circle cx='202.3' cy='104.0' r='11' fill='transparent' data-tip='2026-09-09　温度 47 常温&#10;A 股中位 -0.18%　18/23 涨跌'/><circle cx='202.3' cy='104.0' r='4.4' fill='#58a6ff' data-tip='2026-09-09　温度 47 常温&#10;A 股中位 -0.18%　18/23 涨跌'/><circle cx='228.4' cy='119.2' r='11' fill='transparent' data-tip='2026-09-10　温度 38 偏冷&#10;A 股中位 -1.05%　11/29 涨跌'/><circle cx='228.4' cy='119.2' r='4.4' fill='#58a6ff' data-tip='2026-09-10　温度 38 偏冷&#10;A 股中位 -1.05%　11/29 涨跌'/><circle cx='254.4' cy='114.3' r='11' fill='transparent' data-tip='2026-09-11　温度 41 偏冷&#10;A 股中位 -0.87%　12/29 涨跌'/><circle cx='254.4' cy='114.3' r='4.4' fill='#58a6ff' data-tip='2026-09-11　温度 41 偏冷&#10;A 股中位 -0.87%　12/29 涨跌'/><circle cx='280.5' cy='125.3' r='11' fill='transparent' data-tip='2026-09-14　温度 34 偏冷&#10;A 股中位 -1.64%　10/30 涨跌'/><circle cx='280.5' cy='125.3' r='4.4' fill='#58a6ff' data-tip='2026-09-14　温度 34 偏冷&#10;A 股中位 -1.64%　10/30 涨跌'/><circle cx='306.6' cy='97.9' r='11' fill='transparent' data-tip='2026-09-15　温度 51 常温&#10;A 股中位 +0.16%　23/18 涨跌'/><circle cx='306.6' cy='97.9' r='4.4' fill='#58a6ff' data-tip='2026-09-15　温度 51 常温&#10;A 股中位 +0.16%　23/18 涨跌'/><circle cx='332.6' cy='69.1' r='11' fill='transparent' data-tip='2026-09-16　温度 68 升温&#10;A 股中位 +2.52%　30/11 涨跌'/><circle cx='332.6' cy='69.1' r='4.4' fill='#58a6ff' data-tip='2026-09-16　温度 68 升温&#10;A 股中位 +2.52%　30/11 涨跌'/><circle cx='358.7' cy='108.2' r='11' fill='transparent' data-tip='2026-09-17　温度 44 偏冷&#10;A 股中位 -0.49%　16/25 涨跌'/><circle cx='358.7' cy='108.2' r='4.4' fill='#58a6ff' data-tip='2026-09-17　温度 44 偏冷&#10;A 股中位 -0.49%　16/25 涨跌'/><circle cx='384.7' cy='69.5' r='11' fill='transparent' data-tip='2026-09-18　温度 68 升温&#10;A 股中位 +2.09%　32/9 涨跌'/><circle cx='384.7' cy='69.5' r='4.4' fill='#58a6ff' data-tip='2026-09-18　温度 68 升温&#10;A 股中位 +2.09%　32/9 涨跌'/><circle cx='410.8' cy='89.7' r='11' fill='transparent' data-tip='2026-09-21　温度 56 常温&#10;A 股中位 +0.63%　24/16 涨跌'/><circle cx='410.8' cy='89.7' r='4.4' fill='#58a6ff' data-tip='2026-09-21　温度 56 常温&#10;A 股中位 +0.63%　24/16 涨跌'/><circle cx='436.8' cy='99.6' r='11' fill='transparent' data-tip='2026-09-22　温度 50 常温&#10;A 股中位 -0.07%　19/22 涨跌'/><circle cx='436.8' cy='99.6' r='4.4' fill='#58a6ff' data-tip='2026-09-22　温度 50 常温&#10;A 股中位 -0.07%　19/22 涨跌'/><circle cx='462.9' cy='110.9' r='11' fill='transparent' data-tip='2026-09-23　温度 43 偏冷&#10;A 股中位 -0.45%　13/28 涨跌'/><circle cx='462.9' cy='110.9' r='4.4' fill='#58a6ff' data-tip='2026-09-23　温度 43 偏冷&#10;A 股中位 -0.45%　13/28 涨跌'/><circle cx='488.9' cy='140.5' r='11' fill='transparent' data-tip='2026-09-24　温度 24 冰点&#10;A 股中位 -2.88%　5/36 涨跌'/><circle cx='488.9' cy='140.5' r='4.4' fill='#58a6ff' data-tip='2026-09-24　温度 24 冰点&#10;A 股中位 -2.88%　5/36 涨跌'/><circle cx='515.0' cy='152.6' r='11' fill='transparent' data-tip='2026-09-28　温度 17 冰点&#10;A 股中位 -4.35%　2/39 涨跌'/><circle cx='515.0' cy='152.6' r='4.4' fill='#58a6ff' data-tip='2026-09-28　温度 17 冰点&#10;A 股中位 -4.35%　2/39 涨跌'/><circle cx='541.1' cy='96.2' r='11' fill='transparent' data-tip='2026-09-29　温度 52 常温&#10;A 股中位 +0.41%　24/17 涨跌'/><circle cx='541.1' cy='96.2' r='4.4' fill='#58a6ff' data-tip='2026-09-29　温度 52 常温&#10;A 股中位 +0.41%　24/17 涨跌'/><circle cx='567.1' cy='128.5' r='11' fill='transparent' data-tip='2026-09-30　温度 32 偏冷&#10;A 股中位 -1.91%　10/31 涨跌'/><circle cx='567.1' cy='128.5' r='4.4' fill='#58a6ff' data-tip='2026-09-30　温度 32 偏冷&#10;A 股中位 -1.91%　10/31 涨跌'/><circle cx='593.2' cy='139.9' r='11' fill='transparent' data-tip='2026-10-08　温度 25 冰点&#10;A 股中位 -2.78%　4/37 涨跌'/><circle cx='593.2' cy='139.9' r='4.4' fill='#58a6ff' data-tip='2026-10-08　温度 25 冰点&#10;A 股中位 -2.78%　4/37 涨跌'/><circle cx='619.2' cy='114.1' r='11' fill='transparent' data-tip='2026-10-09　温度 41 偏冷&#10;A 股中位 -1.05%　14/27 涨跌'/><circle cx='619.2' cy='114.1' r='4.4' fill='#58a6ff' data-tip='2026-10-09　温度 41 偏冷&#10;A 股中位 -1.05%　14/27 涨跌'/><circle cx='645.3' cy='133.7' r='11' fill='transparent' data-tip='2026-10-12　温度 29 偏冷&#10;A 股中位 -2.37%　8/33 涨跌'/><circle cx='645.3' cy='133.7' r='4.4' fill='#58a6ff' data-tip='2026-10-12　温度 29 偏冷&#10;A 股中位 -2.37%　8/33 涨跌'/><circle cx='671.3' cy='105.0' r='11' fill='transparent' data-tip='2026-10-13　温度 46 常温&#10;A 股中位 -0.24%　18/23 涨跌'/><circle cx='671.3' cy='105.0' r='4.4' fill='#58a6ff' data-tip='2026-10-13　温度 46 常温&#10;A 股中位 -0.24%　18/23 涨跌'/><circle cx='697.4' cy='144.6' r='11' fill='transparent' data-tip='2026-10-14　温度 22 冰点&#10;A 股中位 -2.92%　2/39 涨跌'/><circle cx='697.4' cy='144.6' r='4.4' fill='#58a6ff' data-tip='2026-10-14　温度 22 冰点&#10;A 股中位 -2.92%　2/39 涨跌'/><circle cx='723.4' cy='143.8' r='11' fill='transparent' data-tip='2026-10-15　温度 22 冰点&#10;A 股中位 -3.89%　11/30 涨跌'/><circle cx='723.4' cy='143.8' r='4.4' fill='#58a6ff' data-tip='2026-10-15　温度 22 冰点&#10;A 股中位 -3.89%　11/30 涨跌'/><circle cx='749.5' cy='96.6' r='11' fill='transparent' data-tip='2026-10-16　温度 51 常温&#10;A 股中位 +0.29%　23/18 涨跌'/><circle cx='749.5' cy='96.6' r='4.4' fill='#58a6ff' data-tip='2026-10-16　温度 51 常温&#10;A 股中位 +0.29%　23/18 涨跌'/><circle cx='775.6' cy='99.9' r='11' fill='transparent' data-tip='2026-10-19　温度 49 常温&#10;A 股中位 +0.21%　21/20 涨跌'/><circle cx='775.6' cy='99.9' r='4.4' fill='#58a6ff' data-tip='2026-10-19　温度 49 常温&#10;A 股中位 +0.21%　21/20 涨跌'/><circle cx='801.6' cy='97.1' r='11' fill='transparent' data-tip='2026-10-20　温度 51 常温&#10;A 股中位 +0.28%　23/17 涨跌'/><circle cx='801.6' cy='97.1' r='4.4' fill='#58a6ff' data-tip='2026-10-20　温度 51 常温&#10;A 股中位 +0.28%　23/17 涨跌'/><circle cx='827.7' cy='107.0' r='11' fill='transparent' data-tip='2026-10-21　温度 45 常温&#10;A 股中位 -0.21%　17/24 涨跌'/><circle cx='827.7' cy='107.0' r='4.4' fill='#58a6ff' data-tip='2026-10-21　温度 45 常温&#10;A 股中位 -0.21%　17/24 涨跌'/><circle cx='853.7' cy='148.3' r='11' fill='transparent' data-tip='2026-10-22　温度 20 冰点&#10;A 股中位 -3.56%　3/38 涨跌'/><circle cx='853.7' cy='148.3' r='4.4' fill='#58a6ff' data-tip='2026-10-22　温度 20 冰点&#10;A 股中位 -3.56%　3/38 涨跌'/><circle cx='879.8' cy='57.6' r='11' fill='transparent' data-tip='2026-10-23　温度 76 升温&#10;A 股中位 +2.78%　38/3 涨跌'/><circle cx='879.8' cy='57.6' r='4.4' fill='#58a6ff' data-tip='2026-10-23　温度 76 升温&#10;A 股中位 +2.78%　38/3 涨跌'/><circle cx='905.8' cy='135.9' r='11' fill='transparent' data-tip='2026-10-26　温度 27 偏冷&#10;A 股中位 -2.88%　9/32 涨跌'/><circle cx='905.8' cy='135.9' r='4.4' fill='#58a6ff' data-tip='2026-10-26　温度 27 偏冷&#10;A 股中位 -2.88%　9/32 涨跌'/><circle cx='931.9' cy='140.7' r='11' fill='transparent' data-tip='2026-10-27　温度 24 冰点&#10;A 股中位 -2.78%　4/37 涨跌'/><circle cx='931.9' cy='140.7' r='4.4' fill='#58a6ff' data-tip='2026-10-27　温度 24 冰点&#10;A 股中位 -2.78%　4/37 涨跌'/><circle cx='957.9' cy='53.7' r='11' fill='transparent' data-tip='2026-10-28　温度 78 升温&#10;A 股中位 +3.62%　37/3 涨跌'/><circle cx='957.9' cy='53.7' r='4.4' fill='#58a6ff' data-tip='2026-10-28　温度 78 升温&#10;A 股中位 +3.62%　37/3 涨跌'/><circle cx='984.0' cy='152.7' r='11' fill='transparent' data-tip='2026-10-29　温度 17 冰点&#10;A 股中位 -4.53%　2/39 涨跌'/><circle class='pk' cx='984.0' cy='152.7' r='4.4' fill='#58a6ff' data-tip='2026-10-29　温度 17 冰点&#10;A 股中位 -4.53%　2/39 涨跌'/><text x='46.0' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/01'</text><text x='150.2' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/07'</text><text x='254.4' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/11'</text><text x='358.7' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/17'</text><text x='462.9' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/23'</text><text x='567.1' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/30'</text><text x='671.3' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/13'</text><text x='775.6' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/19'</text><text x='879.8' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/23'</text><text x='974.0' y='202' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/29'</text></svg></div>
+<p class="note">线 = 温度分（0–100），三条虚线是刻度 25 / 62 / 80。
+点每一期，悬停可看当天的中位涨跌、涨跌家数和温度。越往右越新。</p>
+</section>
+
+<section class="hsec">
+<h2>最近五期<a href="archive.html">全部 37 期</a></h2>
+<ul class="recent"><li><a href='20261029.html'><span class='d'>10-29</span><span class='m'>冰点<small style='color:#3fb950'>17</small><small><span style='color:#3fb950'>-4.53%</span></small></span><span class='v' style='color:#3fb950'>-3.50pt</span><span class='arw'>→</span></a></li><li><a href='20261028.html'><span class='d'>10-28</span><span class='m'>升温<small style='color:#f85149'>78</small><small><span style='color:#f85149'>+3.62%</span></small></span><span class='v' style='color:#f85149'>+2.77pt</span><span class='arw'>→</span></a></li><li><a href='20261027.html'><span class='d'>10-27</span><span class='m'>冰点<small style='color:#3fb950'>24</small><small><span style='color:#3fb950'>-2.78%</span></small></span><span class='v' style='color:#3fb950'>-1.46pt</span><span class='arw'>→</span></a></li><li><a href='20261026.html'><span class='d'>10-26</span><span class='m'>偏冷<small style='color:#3fb950'>27</small><small><span style='color:#3fb950'>-2.88%</span></small></span><span class='v' style='color:#3fb950'>-2.84pt</span><span class='arw'>→</span></a></li><li><a href='20261023.html'><span class='d'>10-23</span><span class='m'>升温<small style='color:#f85149'>76</small><small><span style='color:#f85149'>+2.78%</span></small></span><span class='v' style='color:#f85149'>+1.07pt</span><span class='arw'>→</span></a></li></ul>
+</section>
+
+<footer>AI 主题每日复盘 · 首页生成于 2026-10-31 13:20　·　
+数据日 2026-10-29（页面生成于 2026-10-31 13:20）　·　
+<a href="archive.html">历史归档</a></footer>
+</div>
+<div id="tip"></div>
+<script>
+/* 月份跳转：目标是折叠的月份时把它展开（纯渐进增强，没 JS 也能看到分组标题） */
+function openHash(){
+  var t = location.hash && document.getElementById(location.hash.slice(1));
+  if (t && t.tagName === 'DETAILS') t.open = true;
+}
+addEventListener('hashchange', openHash);
+openHash();
+var tip=document.getElementById('tip');
+document.addEventListener('mousemove',function(e){
+  var t=e.target.closest?e.target.closest('[data-tip]'):null;
+  if(!t){tip.style.opacity=0;return;}
+  var txt=t.getAttribute('data-tip');
+  if(tip.getAttribute('data-k')!==txt){tip.textContent=txt;tip.setAttribute('data-k',txt);}
+  var w=tip.offsetWidth,h=tip.offsetHeight,x=e.clientX+16,y=e.clientY+16;
+  if(x+w>window.innerWidth-10)x=e.clientX-w-16;
+  if(y+h>window.innerHeight-10)y=e.clientY-h-16;
+  tip.style.left=x+'px';tip.style.top=y+'px';tip.style.opacity=1;
+});
+</script>
+</body></html>
