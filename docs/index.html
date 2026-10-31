@@ -134,6 +134,21 @@ h1.h1 .pt.up{color:var(--up)}
 .recent .v{font:600 13.6px/1 var(--mono);text-align:right;font-variant-numeric:tabular-nums}
 .recent .arw{color:#39434f;text-align:right;font:400 15px/1 var(--mono);transition:color .14s,transform .14s}
 .recent a:hover .arw{color:var(--accent);transform:translateX(3px)}
+/* 名单来历：数据全从 data/gs50.csv 数出来，别在文案里写死家数 */
+.hlede{margin:0 0 20px;max-width:88ch;color:#c9d5e1;font-size:14.6px;line-height:1.75;text-wrap:pretty}
+.prov{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.prov li{display:grid;grid-template-columns:112px minmax(0,1fr);gap:18px;padding:15px 0;
+  border-bottom:1px solid var(--line);align-items:baseline}
+.prov .k{font:600 12.2px/1.6 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+.prov .v{font-size:14.3px;line-height:1.78;color:#c9d5e1;min-width:0;text-wrap:pretty}
+.prov .v b{color:#fff;font-weight:600}
+.prov .v em{font:500 .93em/1 var(--mono);font-style:normal;color:#a5ceff;letter-spacing:.01em}
+.layers{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0}
+.layers span{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid #2b3644;
+  border-radius:8px;background:#161b22;color:#c9d5e1;font:500 12.6px/1 var(--mono);
+  font-variant-numeric:tabular-nums}
+.layers i{width:7px;height:7px;border-radius:99px;flex:none}
+.layers span b{color:#fff;font-weight:600}
 .chart{animation:hubin .6s cubic-bezier(.22,1,.36,1) both}
 @keyframes hubin{from{transform:translateY(8px)}to{transform:none}}
 .chart svg circle.pk{animation:hubpulse 1.6s cubic-bezier(.22,1,.36,1) .7s 2}
@@ -163,6 +178,8 @@ h1.h1 .pt.up{color:var(--up)}
   .chart{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
   .recent a{grid-template-columns:74px minmax(0,1fr) 68px;gap:10px;padding:12px 2px 12px 0}
   .recent .exc,.recent .arw{display:none}  .hact{gap:16px}
+  .prov li{grid-template-columns:1fr;gap:5px;padding:13px 0}
+  .prov .k{font-size:11.6px}
 }
 </style></head><body>
 <div class="bar"><div class="bar-in">
@@ -181,6 +198,7 @@ h1.h1 .pt.up{color:var(--up)}
 <a class="go" href="20261030.html">进入本期复盘
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M12 6l6 6-6 6"/></svg></a>
 <a class="more" href="archive.html">看全部 38 期 →</a>
+<a class="more" href="#who">这 54 家怎么来的 →</a>
 </div>
 </header>
 
@@ -206,7 +224,36 @@ h1.h1 .pt.up{color:var(--up)}
 <ul class="recent"><li><a href='20261030.html'><span class='d'>10-30</span><span class='m'>冰点<small style='color:#3fb950'>20</small><small><span style='color:#3fb950'>-4.76%</span></small></span><span class='v' style='color:#3fb950'>-3.37pt</span><span class='arw'>→</span></a></li><li><a href='20261029.html'><span class='d'>10-29</span><span class='m'>冰点<small style='color:#3fb950'>17</small><small><span style='color:#3fb950'>-4.53%</span></small></span><span class='v' style='color:#3fb950'>-3.50pt</span><span class='arw'>→</span></a></li><li><a href='20261028.html'><span class='d'>10-28</span><span class='m'>升温<small style='color:#f85149'>78</small><small><span style='color:#f85149'>+3.62%</span></small></span><span class='v' style='color:#f85149'>+2.77pt</span><span class='arw'>→</span></a></li><li><a href='20261027.html'><span class='d'>10-27</span><span class='m'>冰点<small style='color:#3fb950'>24</small><small><span style='color:#3fb950'>-2.78%</span></small></span><span class='v' style='color:#3fb950'>-1.46pt</span><span class='arw'>→</span></a></li><li><a href='20261026.html'><span class='d'>10-26</span><span class='m'>偏冷<small style='color:#3fb950'>27</small><small><span style='color:#3fb950'>-2.88%</span></small></span><span class='v' style='color:#3fb950'>-2.84pt</span><span class='arw'>→</span></a></li></ul>
 </section>
 
-<footer>AI 主题每日复盘 · 首页生成于 2026-10-31 06:15　·　
+<section class="hsec" id="who">
+<h2>这 54 家怎么来的<a href="20261030.html#s7">口径全文</a></h2>
+<p class="hlede">名单不是我们挑的：GS《China Strategy: AI Changes The Game, China is coming》
+（Goldman Sachs，2026-10-11）正文只公开三张名单表，按中文名去重，就是页面里每天用的这张名单。
+</p>
+<ol class="prov">
+<li><span class="k">出处</span><span class="v">报告的研究域是 <em>1,700+</em> 家中国 AI 上市公司，
+其中 <em>360+</em> 家海外收入占比超 40%（出口链）、<em>880+</em> 家主攻内需。<br>
+完整底表没有随报告公开——公开的只有下面三张表。</span></li>
+<li><span class="k">三张表</span><span class="v"><em>Exhibit 22</em> Export Leaders 20 家　·　
+<em>Exhibit 29</em> Domestic Chinese AI Champions 20 家　·　<em>Exhibit 32</em> China Select AI Portfolio 50 家
+　→　合计 <b>90 行</b>。</span></li>
+<li><span class="k">去重</span><span class="v">同一家公司会同时出现在两三张表里，英文写法也不统一
+（GigaDevice Semi / GigaDevice Semiconductor）——按中文名去重，90 行收成
+<b>54 家</b>：A 股 41、港股 13。</span></li>
+<li><span class="k">分层</span><span class="v">AI 层（Power → Semiconductors → Infrastructure → Model →
+Application）和细分领域直接搬报告 Exhibit 32 的两列，没有二次加工，
+所以下面六层的家数就是报告里的家数。</span></li>
+</ol>
+<div class="layers"><span><i style='background:#58a6ff'></i>半导体 <b>19</b></span><span><i style='background:#39c5cf'></i>基础设施 <b>12</b></span><span><i style='background:#bc8cff'></i>应用·物理 <b>9</b></span><span><i style='background:#d29922'></i>电力 <b>6</b></span><span><i style='background:#f778ba'></i>应用·AI+ <b>5</b></span><span><i style='background:#a5d6ff'></i>模型 <b>3</b></span></div>
+<p class="note">① 同一公司在两张表里标签不一致时人工取一
+（领益智造取 Ex.32 的 Humanoid Robots，腾讯控股取 Ex.29 的 Entertainment &amp; Media）。<br>
+② A/H 两地上市的只取一个交易代码——比亚迪、长飞光纤这类取 A 股，
+13 家只在港/美股挂牌的（腾讯、阿里、小米…）走港股行情，
+所以「54 家」在页面上永远拆成 A 41 / HK 13。<br>
+③ 名单只当探针：不加权重、不做组合、不替 GS 的观点站队。</p>
+</section>
+
+
+<footer>AI 主题每日复盘 · 首页生成于 2026-10-31 14:34　·　
 数据日 2026-10-30（页面生成于 2026-10-31 06:15）　·　
 <a href="archive.html">历史归档</a></footer>
 </div>

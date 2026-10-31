@@ -18,6 +18,7 @@ URL 只有一个角色，别再加别名：
     · 沪深300 只是「A 股宽基 beta」参考；名单 44% 是科创板/创业板成长股，结构错配，
       所以并列创业板指作为同风格对照
 """
+import csv
 import glob
 import json
 import math
@@ -492,6 +493,21 @@ h1.h1 .pt.up{color:var(--up)}
 .recent .v{font:600 13.6px/1 var(--mono);text-align:right;font-variant-numeric:tabular-nums}
 .recent .arw{color:#39434f;text-align:right;font:400 15px/1 var(--mono);transition:color .14s,transform .14s}
 .recent a:hover .arw{color:var(--accent);transform:translateX(3px)}
+/* 名单来历：数据全从 data/gs50.csv 数出来，别在文案里写死家数 */
+.hlede{margin:0 0 20px;max-width:88ch;color:#c9d5e1;font-size:14.6px;line-height:1.75;text-wrap:pretty}
+.prov{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.prov li{display:grid;grid-template-columns:112px minmax(0,1fr);gap:18px;padding:15px 0;
+  border-bottom:1px solid var(--line);align-items:baseline}
+.prov .k{font:600 12.2px/1.6 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+.prov .v{font-size:14.3px;line-height:1.78;color:#c9d5e1;min-width:0;text-wrap:pretty}
+.prov .v b{color:#fff;font-weight:600}
+.prov .v em{font:500 .93em/1 var(--mono);font-style:normal;color:#a5ceff;letter-spacing:.01em}
+.layers{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0}
+.layers span{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid #2b3644;
+  border-radius:8px;background:#161b22;color:#c9d5e1;font:500 12.6px/1 var(--mono);
+  font-variant-numeric:tabular-nums}
+.layers i{width:7px;height:7px;border-radius:99px;flex:none}
+.layers span b{color:#fff;font-weight:600}
 .chart{animation:hubin .6s cubic-bezier(.22,1,.36,1) both}
 @keyframes hubin{from{transform:translateY(8px)}to{transform:none}}
 .chart svg circle.pk{animation:hubpulse 1.6s cubic-bezier(.22,1,.36,1) .7s 2}
@@ -521,7 +537,72 @@ h1.h1 .pt.up{color:var(--up)}
   .chart{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
   .recent a{grid-template-columns:74px minmax(0,1fr) 68px;gap:10px;padding:12px 2px 12px 0}
   .recent .exc,.recent .arw{display:none}  .hact{gap:16px}
+  .prov li{grid-template-columns:1fr;gap:5px;padding:13px 0}
+  .prov .k{font-size:11.6px}
 }
+"""
+
+
+def gs_facts():
+    """从 data/gs50.csv 数出名单构成（总数 / A / HK / 六层家数）。
+    门厅上的“54 家”全从这儿取，名单变了页面自己跟上，不会和文案对不上。"""
+    layers = [("Semiconductors", "半导体", "#58a6ff"),
+              ("Infrastructure", "基础设施", "#39c5cf"),
+              ("Application (Physical)", "应用·物理", "#bc8cff"),
+              ("Power", "电力", "#d29922"),
+              ("Application (AI+)", "应用·AI+", "#f778ba"),
+              ("AI Model", "模型", "#a5d6ff")]
+    try:
+        with open(os.path.join(ROOT, "data", "gs50.csv"), encoding="utf-8-sig", newline="") as f:
+            rows = list(csv.DictReader(f))
+    except (OSError, csv.Error):
+        return None
+    if not rows:
+        return None
+    cnt = {}
+    for r in rows:
+        cnt[r.get("ai_layer", "")] = cnt.get(r.get("ai_layer", ""), 0) + 1
+    return {"n": len(rows),
+            "a": sum(1 for r in rows if r.get("market") == "A"),
+            "hk": sum(1 for r in rows if r.get("market") == "HK"),
+            "layers": [(lab, col, cnt.get(key, 0)) for key, lab, col in layers if cnt.get(key)]}
+
+
+def provenance(day, f, day_url):
+    """门厅的“名单怎么来的”：出处（GS 三张表）→ 去重 → 分层，数字全部来自 gs50.csv。"""
+    if not f:
+        return ""
+    chips = "".join(
+        f"<span><i style='background:{col}'></i>{esc(lab)} <b>{n}</b></span>"
+        for lab, col, n in f["layers"])
+    return f"""<section class="hsec" id="who">
+<h2>这 {f['n']} 家怎么来的<a href="{day_url}#s7">口径全文</a></h2>
+<p class="hlede">名单不是我们挑的：GS《China Strategy: AI Changes The Game, China is coming》
+（Goldman Sachs，2026-10-11）正文只公开三张名单表，按中文名去重，就是页面里每天用的这张名单。
+</p>
+<ol class="prov">
+<li><span class="k">出处</span><span class="v">报告的研究域是 <em>1,700+</em> 家中国 AI 上市公司，
+其中 <em>360+</em> 家海外收入占比超 40%（出口链）、<em>880+</em> 家主攻内需。<br>
+完整底表没有随报告公开——公开的只有下面三张表。</span></li>
+<li><span class="k">三张表</span><span class="v"><em>Exhibit 22</em> Export Leaders 20 家　·　
+<em>Exhibit 29</em> Domestic Chinese AI Champions 20 家　·　<em>Exhibit 32</em> China Select AI Portfolio 50 家
+　→　合计 <b>90 行</b>。</span></li>
+<li><span class="k">去重</span><span class="v">同一家公司会同时出现在两三张表里，英文写法也不统一
+（GigaDevice Semi / GigaDevice Semiconductor）——按中文名去重，90 行收成
+<b>{f['n']} 家</b>：A 股 {f['a']}、港股 {f['hk']}。</span></li>
+<li><span class="k">分层</span><span class="v">AI 层（Power → Semiconductors → Infrastructure → Model →
+Application）和细分领域直接搬报告 Exhibit 32 的两列，没有二次加工，
+所以下面六层的家数就是报告里的家数。</span></li>
+</ol>
+<div class="layers">{chips}</div>
+<p class="note">① 同一公司在两张表里标签不一致时人工取一
+（领益智造取 Ex.32 的 Humanoid Robots，腾讯控股取 Ex.29 的 Entertainment &amp; Media）。<br>
+② A/H 两地上市的只取一个交易代码——比亚迪、长飞光纤这类取 A 股，
+13 家只在港/美股挂牌的（腾讯、阿里、小米…）走港股行情，
+所以「{f['n']} 家」在页面上永远拆成 A {f['a']} / HK {f['hk']}。<br>
+③ 名单只当探针：不加权重、不做组合、不替 GS 的观点站队。</p>
+</section>
+
 """
 
 
@@ -534,6 +615,7 @@ def hub(rows, last):
     sc = last.get("score")
     mood = esc(last.get("mood") or "")
     med, exc, share = last.get("median"), last.get("excess"), last.get("amount_share")
+    gs = gs_facts()
 
     # H1 = 当天页自己的结论，不从别处另起一套话术；两个分句各自成块，换行只发生在 ·
     h1 = f"<span class='cl'>{mood} {sc:.0f}</span>" if (ok(sc) and mood) else f"<span class='cl'>温度 {sc:.0f}</span>"
@@ -592,6 +674,7 @@ def hub(rows, last):
 <a class="go" href="{day}.html">进入本期复盘
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M12 6l6 6-6 6"/></svg></a>
 <a class="more" href="archive.html">看全部 {n} 期 →</a>
+<a class="more" href="#who">这 {gs['n'] if gs else 54} 家怎么来的 →</a>
 </div>
 </header>
 
@@ -609,6 +692,7 @@ def hub(rows, last):
 <ul class="recent">{recent}</ul>
 </section>
 
+{provenance(day, gs, f"{day}.html")}
 <footer>AI 主题每日复盘 · 首页生成于 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M}　·　
 数据日 {dlabel(day)}{f'（页面生成于 {built}）' if built else ''}　·　
 <a href="archive.html">历史归档</a></footer>
