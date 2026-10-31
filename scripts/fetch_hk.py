@@ -123,6 +123,7 @@ def kline_tushare(code, end_day, bars=400, max_seg=3):
     return pd.DataFrame({"date": d.trade_date.astype(str).str.replace(
                              r"(\d{4})(\d{2})(\d{2})", r"\1-\2-\3", regex=True),
                          "close": adj.round(3).to_numpy(),
+                         "raw": close.round(3).to_numpy(),          # 未复权收盘：市值 / PE 要用真价，不能用前复权
                          "amount_yi": (pd.to_numeric(d.amount, errors="coerce") / 1e8).round(2).to_numpy()})
 
 

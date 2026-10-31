@@ -21,6 +21,7 @@ import glob
 import json
 import math
 import os
+import re
 import sys
 
 _CWD0 = os.getcwd()   # chdir 前记住调用处的工作目录，--out/--summary 的相对路径按它解析
@@ -256,8 +257,13 @@ def build():
     # 港股：快照 + 前复权日线（动量/量能/走势）+ 卖方共识 NTM PE，见 scripts/fetch_hk.py
     hk = gs[gs.market == "HK"].copy()
     hkf = [c for c in sorted(glob.glob("hk/*.csv")) if os.path.basename(c)[:8] <= day]
+    # 港股只认「当天那份」：日期缺了就留空 + 挂提示，不能拿前一天的快照冒充今天
+    #（近似回补由 scripts/backfill_hk.py 按日期生成，所以正常情况下每天都有）
+    hk_exact = os.path.join("hk", f"{day}.csv")
+    hkf = [hk_exact] if os.path.exists(hk_exact) else []
     hk_fx = HKD_CNY
     hk_cons_day, hk_hist_src = "—", "—"
+    hk_approx_day, hk_basis = "—", "—"
     if hkf:
         h = pd.read_csv(hkf[-1], encoding="utf-8-sig", dtype={"hk_code": str}).set_index("hk_code")
         for col, src in (("close", "price"), ("pct_chg", "pct_chg"), ("mcap_yi", "total_mv_yi"),
@@ -276,6 +282,10 @@ def build():
             hk_cons_day = str(h.cons_date.dropna().astype(str).max()).replace("-", "")
         if "hist_src" in h.columns and h.hist_src.notna().any():
             hk_hist_src = str(h.hist_src.dropna().iloc[0]).split(" +")[0]
+        if "approx" in h.columns and pd.to_numeric(h.approx, errors="coerce").fillna(0).max() >= 1:
+            hk_approx_day = os.path.basename(hkf[-1])[:8]      # 这一天的港股里有「日收益链」近似出来的行
+        if "basis" in h.columns and h.basis.notna().any():
+            hk_basis = str(h.basis.dropna().astype(str).mode().iloc[0])
         for c, s in zip(hk.hk_code, h.get("spark", pd.Series(dtype=object)).reindex(hk.hk_code)):
             try:
                 spark[c] = json.loads(s)
@@ -432,20 +442,23 @@ def build():
     board_n = hist_b.groupby("bk").code.nunique()
     board_up = hist_b[hist_b.day == day].assign(up=lambda d: d.pct_chg > 0).groupby("bk").up.mean()
 
-    # 板块 N 日收益 = 成分 N 日收益的中位
+    # 板块 N 日收益 = 成分 N 日收益的中位；listed_* 只算名单内成分（象限图用，和层的口径一致）
     pxb = hist_b.pivot_table(index="day", columns="code", values="close").reindex(days)
-    board_r5, board_r20 = {}, {}
+    name_codes = set(panel[panel.market == "A"].code)
+    board_r5, board_r20, board_r5l, board_r20l = {}, {}, {}, {}
     for bk, grp in hist_b[hist_b.day == day].groupby("bk"):
         codes = [c for c in grp.code if c in pxb.columns]
-        for lag, box in ((5, board_r5), (20, board_r20)):
-            rs = []
+        for lag, box, boxl in ((5, board_r5, board_r5l), (20, board_r20, board_r20l)):
+            rs, rsl = [], []
             for c in codes:
                 ser = pxb[c].dropna()
                 if len(ser) > lag:
-                    rs.append((ser.iloc[-1] / ser.iloc[-1 - lag] - 1) * 100)
+                    v = (ser.iloc[-1] / ser.iloc[-1 - lag] - 1) * 100
+                    rs.append(v)
+                    if c in name_codes:
+                        rsl.append(v)
             box[bk] = float(pd.Series(rs).median()) if rs else float("nan")
-
-    name_codes = set(panel[panel.market == "A"].code)
+            boxl[bk] = float(pd.Series(rsl).median()) if rsl else float("nan")
     board_rows = []
     for bk in board_day.columns:
         s = board_day[bk].dropna()
@@ -464,6 +477,8 @@ def build():
             if bk in board_amt and len(days) > 2 else float("nan"),
             "listed_n": int(len(listed)),
             "listed_med": float(listed.pct_chg.median()) if len(listed) else float("nan"),
+            "listed_r5": board_r5l.get(bk, float("nan")),
+            "listed_r20": board_r20l.get(bk, float("nan")),
             "leader": "", "leader_pct": float("nan"),
         })
     bdf = pd.DataFrame(board_rows)
@@ -536,7 +551,8 @@ def build():
                 amt_ratio=amt_ratio, theme_amt_ratio=theme_amt_ratio, hi_n=hi_n,
                 boards=bdf, kline=kline, hist=hist, cons_day=cons_day, retro=retro,
                 theme_hk=theme_hk, hk_day_med=hk_day_med,
-                hk_cons_day=hk_cons_day, hk_hist_src=hk_hist_src)
+                hk_cons_day=hk_cons_day, hk_hist_src=hk_hist_src, hk_approx_day=hk_approx_day,
+                hk_basis=hk_basis)
 
 
 # ------------------------------------------------------------------ 图
@@ -768,22 +784,22 @@ def quadrant(rows, title, sub, W=1120, H=420, foot=""):
         rad = 6.5 + 10 * math.sqrt(min(r.get("size", 1) / 300, 1))
         cx_, cy_ = xx(r["x"]), yy(r["y"])
         tip = esc(f"{r['name']}\n量能 {r['x']:.2f}× · 动量 {r['y']:+.2f}%")
-        if r.get("n"):
-            tip += esc(f" · {int(r['n'])} 家")
+        if r.get("ntxt"):
+            tip += esc(f" · {r['ntxt']}")
         p.append(f"<circle cx='{cx_:.1f}' cy='{cy_:.1f}' r='{rad:.1f}' fill='{r['color']}' opacity='.62' "
                  f"stroke='{r['color']}' data-tip='{tip}'/>")
         for dy in (4, -8, 16, -20, 28, -32):
             for dx, anch in ((rad + 3, "start"), (-rad - 3, "end")):
                 bx, by = cx_ + dx, cy_ + dy
                 est = 13.8 * len(str(r["name"]))
-                x0, x1 = (bx, bx + est) if anch == "start" else (bx - est, bx)
-                if x1 > W - R - 8 or x0 < L + 4:
+                bx0, bx1 = (bx, bx + est) if anch == "start" else (bx - est, bx)   # 别叫 x0/x1：会顶掉坐标域
+                if bx1 > W - R - 8 or bx0 < L + 4:
                     continue
                 # 已经放下的标签 + 别人的气泡，两个都要让开（自己那个不算：dy 本来就贴着它写）
-                if not _box_free(x0, by - 11, x1, by + 3, boxes,
+                if not _box_free(bx0, by - 11, bx1, by + 3, boxes,
                                  [(xx(o["x"]), yy(o["y"]), _orad(o)) for o in draw if o is not r]):
                     continue
-                boxes.append((x0, by - 11, x1, by + 3))
+                boxes.append((bx0, by - 11, bx1, by + 3))
                 p.append(f"<text x='{bx:.1f}' y='{by:.1f}' fill='#c9d5e1' font-size='{FT_S}' text-anchor='{anch}'>{esc(r['name'])}</text>")
                 dy = None
                 break
@@ -1676,12 +1692,14 @@ def main():
         num = amt_hist.iloc[-k:].mean()
         rest = amt_hist.iloc[:-k] if k < len(amt_hist) else amt_hist.iloc[:-1]
         den = float(rest.mean())
-        return float(num) / den if den else float("nan")
+        # 建库第一天没有「此前均额」→ 没有基线，横轴按 1.00× 占位（否则整张图会退化成「无数据」）
+        return float(num) / den if den and den == den else 1.0
 
     q_spans = [("d", "今日", "今日成交额 / 其余日均", "今日中位涨跌", "量价：今天谁在异动"),
                ("5", "近 5 日", "近 5 日均额 / 此前均额", "5 日累计中位", "量价：这一周谁在放量"),
                ("20", "近 20 日", "近 20 日均额 / 此前均额", "20 日累计中位", "量价：这一个月的主线")]
     ycol = {"d": "med", "5": "r5", "20": "r20"}
+    ycol_l = {"d": "listed_med", "5": "listed_r5", "20": "listed_r20"}   # 灰点：只算名单内成分
     top_b = bdf[bdf.listed_n >= 1].nlargest(5, "amt") if not bdf.empty else pd.DataFrame()
     q_figs = []
     for span, lbl, xdesc, ydesc, title in q_spans:
@@ -1690,14 +1708,19 @@ def main():
             x = amt_win(lay_amt[l], span) if l in lay_amt.columns else float("nan")
             rows.append({"name": SHORT[l], "color": COLOR[l], "x": float(x),
                          "y": float(r.get(ycol[span], float("nan"))), "size": 60,
-                         "n": int(r.get("n", 0))})
+                         "n": int(r.get("n", 0)), "ntxt": f"层内 {int(r.get('n', 0))} 家"})
         for _, b in top_b.iterrows():
             x = amt_win(board_amt[b.bk], span) if b.bk in board_amt.columns else float("nan")
             rows.append({"name": b.board, "color": "#8b949e", "x": float(x),
-                         "y": float(b.get(ycol[span], float("nan"))), "size": 40,
-                         "n": int(b.get("n", 0))})
-        foot = f"横轴：{xdesc}　纵轴：{ydesc}　气泡：家数"
-        sub = f"灰点 = 相关板块（成交额前 5）　·　右上 放量上涨 / 右下 放量下跌　·　{lbl}口径"
+                         "y": float(b.get(ycol_l[span], float("nan"))), "size": 40,
+                         "n": int(b.get("listed_n", 0)),
+                         "ntxt": f"名单内 {int(b.get('listed_n', 0))} 家 / 全成分 {int(b.get('n', 0))} 家"})
+        foot = f"横轴：{xdesc}　纵轴：{ydesc}"
+        n_grey = sum(1 for r in rows if r["color"] == "#8b949e" and not pd.isna(r["y"]))
+        sub = (("灰点 = 相关板块（成交额前 5，同口径只算名单内成分）　·　" if n_grey else "")
+               + f"右上 放量上涨 / 右下 放量下跌　·　{lbl}口径")
+        if len(days) <= 1:
+            sub += "　·　首日无量能基线，横轴按 1.00× 占位"
         q_figs.append((span, f"<div class='chart'>{quadrant(rows, title, sub, foot=foot)}</div>"))
     q_switch = figbox([("win", [(s, l2, s == "d") for s, l2, *_ in q_spans], "窗口")], q_figs)
 
@@ -1729,7 +1752,9 @@ def main():
     day_iso = f"{day[:4]}-{day[4:6]}-{day[6:8]}"
     last_q = panel[panel.market == "HK"]
     retro_warn = ""
-    quote_note = "最早一份快照（回溯补算）" if D.get("retro") else "不晚于数据日的最近一份快照"
+    quote_note = (f"tushare <code>daily_basic</code> 的当日截面（{D.get('quote_day')}）"
+                  if D.get("quote_day") == day else
+                  f"「{D.get('quote_day')} 快照」的截面（回溯日没有当日快照）")
     prev_amt = stats.get("amount_prev")
     chg_amt = ("<span class='na'>—</span>" if prev_amt is None or pd.isna(prev_amt) or not prev_amt
                else f"{stats['amount'] / prev_amt - 1:+.1%}")
@@ -1739,7 +1764,33 @@ def main():
             f"行情、成交额、涨跌停、5/20 日动量、60 日高、量能倍数都只用到 {day} 及之前的数据（不含未来）；"
             f"但 {day} 当时没有腾讯快照，市值 / PE / 换手退回 {D['quote_day']} 的快照，"
             "所以第 6 节（估值）只看结构、别比数值。完整口径的历史页从有当日快照的那天开始。</div>")
-    if D.get("hk_cons_day") == "—" and panel[panel.market == "HK"].close.isna().all():
+    # 港股的数据来源差异不挂在页顶（那是“怎么算”的说明），写在 7 口径 · 数据来源 里
+    hk_note = ""
+    if D.get("hk_approx_day", "—") != "—":
+        _anchor = re.search(r"锚点 (\d{8})", str(D.get("hk_hist_src", "")))
+        _a = _anchor.group(1) if _anchor else "最近一份真实快照"
+        hk_note = (
+            f"<p><b>港股（{day}，近似回补）：</b>这天没有腾讯当日快照（接口只给当下；tushare 港股也没有「每日指标」这一层，"
+            "所谓 <code>hk_dailybasic</code> 这个接口并不存在），价格是按 <code>hk/kline.csv</code> 的日收益链"
+            f"从 {_a} 的真实快照推回来的，市值 / PE 再按市值同比例折算（股本、净利、共识视为不变），"
+            "金额只到百分位量级可信。</p>")
+    elif D.get("hk_basis") == "raw":
+        _anchor = re.search(r"快照 (\d{8})", str(D.get("hk_hist_src", "")))
+        _a = _anchor.group(1) if _anchor else "最近一份真实快照"
+        hk_note = (
+            f"<p><b>港股（{day}，按收盘还原）：</b>这天没有腾讯当日快照（接口只给当下；tushare 港股没有「每日指标」层，"
+            "<code>hk_dailybasic</code> 这个接口并不存在）。价格来自 tushare <code>hk_daily</code> 的<b>未复权收盘</b>；"
+            f"市值 = 收盘 × {_a} 快照的股本，PE_TTM / PE_NTM 按市值比折算（净利与共识沿用 {_a}，"
+            "与有快照的日子同一个口径，所以序列连续，只是绝对值只到百分位量级）；"
+            "机构数 / 共识日期 / FY0·FY1 EPS / forwardPE 因无法回溯而留空。</p>")
+
+    _hkm = D.get("hk_day_med")
+    _hk_had = _hkm is not None and day in getattr(_hkm, "index", []) and not pd.isna(_hkm.get(day, float("nan")))
+    if D.get("hk_cons_day") == "—" and panel[panel.market == "HK"].close.isna().all() and not _hk_had:
+        retro_warn += (
+            f"<div class='warn'><b>港股当日休市：</b>{day} 港股没有交易（<code>hk/kline.csv</code> 当日无记录），"
+            "所以港股 13 家在估值、全表两节为空，顶部卡片里的港股中位也是空的。</div>")
+    elif D.get("hk_cons_day") == "—" and panel[panel.market == "HK"].close.isna().all():
         retro_warn += (
             f"<div class='warn'><b>港股快照缺失：</b>{day} 没有 <code>data/hk/{day}.csv</code>，"
             "本页全表里港股 13 家的价格 / 动量 / PE 为空，所以估值、全表两节只看 A 股；"
@@ -1916,17 +1967,24 @@ def main():
 <h2 id="s7"><span class="n">7</span>口径<span class="meta">需要时展开</span></h2>
 <details class="fine"><summary>数据来源</summary><div class="body">
 <p>这 54 家不是组合，是<b>采样点</b>——用它读 AI 这条线在中国的温度、广度、轮动和与概念板块的背离。</p>
-<p>A 股 41 家用通达信盘后包（收盘价、成交额、涨跌停），市值与 PE 用{quote_note}（{D['quote_day']}）；
-港股 13 家用腾讯（快照 + 前复权日线），前瞻 PE 用 Yahoo 卖方共识；基准用腾讯指数（沪深300 / 创业板指 / 恒生科技）；
+<p>A 股 41 家用通达信盘后包（收盘价、成交额、涨跌停），市值 / PE_TTM / 换手 / 量比用 {quote_note}；
+港股 13 家：当日有腾讯快照就用快照（价格 / 总市值 / PE_TTM），历史日由 tushare <code>hk_daily</code> 未复权收盘还原；
+动量 / 量能 / 走势用 <code>hk_daily</code> 日线；前瞻 PE 用 Yahoo 卖方共识；
+基准用腾讯指数（沪深300 / 创业板指 / 恒生科技）；
 成交额占比 = 名单（41 家 A 股）成交额 / A 股全市场成交额（<b>不含港股</b>）。</p>
+{hk_note}
 </div></details>
 <details class="fine"><summary>口径与基准（6 条）</summary><div class="body">
 <p><b>① 名单：</b>GS 三张表去重 54 家（A 41 / HK 13），<b>不构成组合</b>，页面里没有权重和归因。</p>
-<p><b>② A 股行情：</b>涨跌与成交额来自通达信官网盘后包（当日收盘口径，与交易所一致）；港股快照来自腾讯，5/10/20 日、量能与 40 日走势来自 {D['hk_hist_src']} 前复权日线。</p>
+<p><b>② A 股行情：</b>涨跌与成交额来自通达信官网盘后包（当日收盘口径，与交易所一致）；港股当日快照来自腾讯，5/10/20 日、量能与 40 日走势来自 {D['hk_hist_src']}。</p>
 <p><b>③ 港股 PE：</b>13 家前瞻 PE 来自 Yahoo 卖方共识（覆盖 1–32 家机构，小票只有 1–4 家，参考度弱于 A 股的 20+ 家）；
 分层 PE 打点图里港股是空心点（口径相同、只标记市场），PEG 散点图暂不含港股——Yahoo 那份共识没有 FY1/FY2 明细，算不出增速。</p>
-<p><b>④ 板块：</b>口径 = AI 相关东财概念板块（<code>data/em_cons.csv</code>，12,729 条成分关系），每个板块当天的中位 = 成分股
-（全 A，含名单外）当日涨跌的<b>中位数</b>；异动榜的「板块中位」= 一只股票所属全部板块中位的<b>均值</b>。</p>
+<p><b>④ 板块：</b>口径 = AI 相关东财概念板块（<code>data/em_cons.csv</code>，12,729 条成分关系）。板块中位分两种样本，
+页面按用途分开用：<b>象限图灰点</b>只算<b>名单内成分</b>（和彩点同一样本：层内中位 vs 板块内中位，都是 54 家里那 41 家 A 股，
+所以两族点可以直接比位置）；<b>板块表格 / 异动榜</b>用<b>全成分</b>（含名单外，382 家也算），代表市场口径，
+异动榜的「板块中位」= 一只股票所属全部板块中位的<b>均值</b>。灰点 tooltip 里两个家数都写了（名单内 N 家 / 全成分 M 家）。
+一个例外：<b>近 5 日 / 近 20 日</b>窗口的灰点需要板块成分在本地日线里够长——盘后包只存了 2026-09-01 起的记录
+（长历史日线只有 54 家名单），所以 2026-09-30 之前的页面这两张图只有彩点，副标题会自动不写「灰点」那句。</p>
 <p><b>⑤ 温度分数：</b>= 中位涨跌 + 广度 + 量能 + 创新高家数的加权，0–100，仅用于横向比较，不是预测。</p>
 <p><b>⑥ 基准口径：</b>名单中位 / 新高 / 成交额占比都是<b> 41 家 A 股</b>口径，分母也是 A 股全市场（不含港股）；
 沪深300 只是「A 股宽基 beta」参考——这份名单 44% 是科创板/创业板成长股、没有银行地产，

@@ -410,7 +410,7 @@ def build(docs_dir):
 
 <footer>AI 主题每日复盘 · 归档页生成于 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M}　·　
 {len(rows)} 期　·　重新生成：<code>python scripts/build_archive.py</code>　·　
-<a href="index.html">首页</a></footer>
+<a href="index.html">首页</a>　·　<a href="manual.html">项目说明</a></footer>
 </div>
 <div id="tip"></div>
 {TIP_JS}
@@ -425,8 +425,31 @@ def build(docs_dir):
     with open(hub_path, "w", encoding="utf-8", newline="") as fh:
         fh.write(hub(rows, last))
     print(f"写出 {hub_path} → 门厅（{dlabel(last['day'])}，{len(rows)} 期）")
+    # 根目录放一个跳转壳：docs/ 是发布目录（GH Pages），但本地点开时根目录更顺手
+    stub = os.path.join(os.path.dirname(docs_dir), "index.html")
+    rel = os.path.relpath(hub_path, os.path.dirname(docs_dir)).replace(os.sep, "/")
+    with open(stub, "w", encoding="utf-8", newline="") as fh:
+        fh.write(PORTAL.replace("$target", rel))
+    print(f"写出 {stub} → 跳转壳（→ {rel}）")
     return out
 
+
+# 根目录 index.html：只做跳转，指针永远指向 docs/index.html（唯一真源在那儿，不复制内容）
+PORTAL = """<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>AI 主题每日复盘</title>
+<meta http-equiv="refresh" content="0; url=$target">
+<style>body{background:#0d1117;color:#c9d5e1;font:15px/1.7 ui-monospace,Menlo,Consolas,monospace;
+display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}
+a{color:#58a6ff}small{color:#8b949e}</style></head>
+<body><div>
+<p>正在打开看板…</p>
+<p><a href="$target">如果没有自动跳转，点这里</a></p>
+<p><small>$target</small></p>
+</div>
+<script>location.replace("$target");</script>
+</body></html>
+"""
 
 HUB_CSS = """
 /* ---------- 门厅 index.html：入口页，不是跳转壳 ---------- */
@@ -623,6 +646,7 @@ def hub(rows, last):
 <a class="brand" href="index.html"><span class="dot"></span>AI 主题复盘</a>
 <span class="sp"></span>
 <a class="btn" href="archive.html" title="全部 {n} 期历史归档 · 温度与中位的逐日总览"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg>历史总览</a>
+<a class="btn" href="manual.html" title="数据从哪来、谁在用哪个接口、哪些拿不到"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v1m0 3v6"/></svg>项目说明</a>
 </div></div>
 <div class="hwrap">
 <header class="hhead">

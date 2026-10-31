@@ -47,6 +47,7 @@ def fetch_one(code, day, bars):
     kl = kl.iloc[1:]                                   # 第一根没有前收
     out = kl[["date", "pct", "amount_yi"]].copy()
     out.insert(0, "hk_code", code)
+    out["raw"] = (kl["raw"] if "raw" in kl.columns else float("nan"))   # 未复权收盘（市值/PE 用）
     return out
 
 

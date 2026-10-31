@@ -258,6 +258,53 @@ def tencent_quotes(codes):
     return pd.DataFrame(list(out.values()))
 
 
+def db_quotes(day):
+    """A 股快照的「按日期版本」——腾讯快照只有当日值，tushare daily_basic 有历史。
+
+    市值 / 流通市值 / 换手 / 量比 / PE / PB 取自 daily_basic(trade_date=day)，
+    价格 / 涨跌 / 成交额 / 涨跌停取自当日盘后包（mkt/<day>.csv），两边按 6 位代码对齐，
+    产出 schema 与腾讯快照完全一致的 quote/<day>.csv（页面不用改）。
+    回溯补历史就用这个：`python scripts/theme_data.py dbquotes 20260915`
+    """
+    import tushare_client as tc
+    p = f"mkt/{day}.csv"
+    if not os.path.exists(p):
+        raise SystemExit(f"{day} 没有盘后包 mkt/{day}.csv，先跑 pkg {day}")
+    m = pd.read_csv(p, encoding="utf-8-sig", dtype={"code": str})
+    g = pd.read_csv("gs50.csv", encoding="utf-8-sig", dtype=str).fillna("")
+    codes = [c for c in g.a_code6 if c]
+    pro = tc.pro()
+    db = tc.call(pro.daily_basic, tries=6, trade_date=day,
+                 fields="ts_code,trade_date,close,turnover_rate,volume_ratio,pe,pe_ttm,pb,total_mv,circ_mv")
+    if db is None or not len(db):
+        raise SystemExit(f"daily_basic 没有 {day} 的数据")
+    db = db.copy()
+    db["code"] = db.ts_code.astype(str).str[:6]
+    d = db.drop_duplicates("code").set_index("code")
+    rows, miss = [], []
+    for _, r in m[m.code.isin(set(codes))].iterrows():
+        if r.code not in d.index:
+            miss.append(r.code)
+            continue
+        b = d.loc[r.code]
+        amp = ((r.high - r.low) / r.prev_close * 100) if r.prev_close else float("nan")
+        rows.append({
+            "code": r.code, "name": r.name, "price": r.close, "pct_chg": r.pct_chg,
+            "amount_yi": r.amount_yi, "turnover": b.turnover_rate, "pe_ttm": b.pe_ttm,
+            "amplitude": round(amp, 2) if amp == amp else float("nan"),
+            "float_mcap_yi": round(b.circ_mv / 1e4, 2), "mcap_yi": round(b.total_mv / 1e4, 2),
+            "pb": b.pb, "limit_up": r.limit_up, "limit_down": r.limit_down,
+            "vol_ratio": b.volume_ratio, "pe_static": b.pe, "stale": False})
+    out = pd.DataFrame(rows)
+    if out.empty:
+        raise SystemExit(f"{day} 一份都对不上（daily_basic 当天没有这 54 家）")
+    os.makedirs("quote", exist_ok=True)
+    out.to_csv(f"quote/{day}.csv", index=False, encoding="utf-8-sig")
+    print(f"行情（daily_basic）：{len(out)}/{len(codes)} 条 → quote/{day}.csv"
+          + (f"　缺 {miss}" if miss else ""))
+    return out
+
+
 def fetch_hk_quotes(codes, day):
     """港股快照 + 前复权日线 + 共识 NTM PE 统一由 scripts/fetch_hk.py 负责（它写 hk/{day}.csv）
 
@@ -358,6 +405,8 @@ def main():
         os.makedirs("quote", exist_ok=True)
         q.to_csv(f"quote/{day}.csv", index=False, encoding="utf-8-sig")
         print(f"行情：{len(q)} 条 → quote/{day}.csv")
+    if cmd == "dbquotes":
+        db_quotes(day)
     if cmd in ("kline", "all"):
         refresh_kline(a_codes + list(BENCH))
     print("done")

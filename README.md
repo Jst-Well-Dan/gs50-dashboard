@@ -28,12 +28,16 @@ python scripts/run_daily.py --no-backfill   # 只出今天这一页，不补历�
 | 3 | `build_gs50_dashboard.py <day>` | 出 `docs/<day>.html` + `docs/data/<day>.json` | 2 秒 |
 | 4 | `build_archive.py` | 出 `docs/archive.html`（趋势图 + 逐日表）+ 重写 `docs/index.html` | 1 秒 |
 
-看页面（本地起个静态服务，或直接双击 HTML）：
+看页面（双击根目录 `index.html` 最省事，或起个静态服务）：
 
 ```bash
+# 根目录 index.html 是个跳转壳（→ docs/index.html），双击即可，file:// 也能用
 python -m http.server 8000 --directory docs
 # 或直接双击 docs/20261029.html（单文件内嵌 SVG，离线可看）
 ```
+
+根目录的 `index.html` **不是第二份内容**：它只有一句 meta refresh + 一个兜底链接，指向 `docs/index.html`，
+由 `build_archive.py` 每次重建时覆盖（所以不会漂）。内容永远只有 `docs/` 这一份真源。
 
 ## 历史归档（为什么每天留一份）
 
@@ -46,6 +50,32 @@ python -m http.server 8000 --directory docs
 - 缺页自愈：
   `run_daily.py` 每次会检查 `docs/<day>.html` 是否齐全，缺的就补（首次部署 36 天约 3 分钟）。
   改了页面模板要统一刷一遍旧日期页：`python scripts/run_daily.py --rebuild --all`（约 7 分钟）。
+
+## 补历史数据（估值 / 港股 / 共识）
+
+三种字段的回补路径，全都不偷看未来：
+
+```bash
+# ① A 股 市值 / PE_TTM / 换手 / 量比（腾讯只有当日 → 用 tushare daily_basic 按 trade_date 回补）
+for d in $(ls data/mkt | sed 's/.csv//'); do python scripts/theme_data.py dbquotes $d; done
+
+# ② A 股共识 PE_NTM：先把原始研报表缓存拉宽（分段拉，代理单次区间上限约 170 天），再按日离线重算
+python scripts/fetch_consensus.py 20261030 --force --window=250
+for d in $(ls data/mkt | sed 's/.csv//'); do python scripts/fetch_consensus.py $d --offline --force; done
+
+# ③ 港股：日线补到最新，再由「最近一份真实快照」按日推导
+python scripts/build_hk_kline.py 20261030 --force   # 日线（含未复权收盘 raw）补到最新
+python scripts/backfill_hk.py            # 只补 hk/ 里缺的交易日
+python scripts/backfill_hk.py --all      # 连已有真实快照的日子也补（只填空列，不覆盖真值）
+
+# ④ 重出页面
+python scripts/run_daily.py --rebuild --all
+```
+
+一句话口径：**盘后包 / 日线 / 共识都能按日期原样重取；腾讯的「当下快照」取不回 ——
+A 股换 tushare `daily_basic`（真值），港股用未复权收盘还原 + 快照锚点折算（写在页面第 7 节「口径 · 数据来源」里）。**
+实测（2026-10-31 补 2026-09-01~2026-10-30 共 38 期）：38 页的 A 股共识 41/41、港股 13/13 全部补齐，
+港股近似两天跨度误差中位 0.2%。
 
 ## 部署到 GitHub Pages
 
@@ -87,10 +117,11 @@ Pages 的源目录就是 `docs/`，不用改任何构建配置：
 ```
 scripts/
   run_daily.py              唯一入口，串起下面四步
-  theme_data.py             行情数据层（通达信官网盘后包 / 腾讯行情 / 腾讯 K 线 / 港股）
+  theme_data.py             行情数据层（通达信官网盘后包 / 腾讯行情 / 腾讯 K 线 / 港股 / tushare daily_basic）
   fetch_hk.py               港股 13 家：快照 + 日线 + 共识 NTM PE
-  fetch_consensus.py        A 股卖方共识 NTM（tushare report_rc）
+  fetch_consensus.py        A 股卖方共识 NTM（tushare report_rc，口径按「那天」算）
   build_hk_kline.py         港股 13 家日线收益长表 → data/hk/kline.csv（归档页的港股中位靠它）
+  backfill_hk.py            历史日的港股快照「近似回补」（日收益链 × 最近真实快照的水平）
   build_gs50_dashboard.py   出单日页面（--out / --summary 指定输出）
   build_archive.py          历史归档页（读 docs/data/*.json）
   tushare_client.py         tushare 代理客户端（限速 + 重试）
@@ -122,29 +153,40 @@ deploy.bat                  双击 commit + push 到 GitHub
 | 数据 | 来源 | 口径 / 注意 |
 |---|---|---|
 | A 股收盘、成交额、涨跌停 | 通达信官网盘后包（`theme_data.py`） | 与交易所一致；T 日盘后发布 |
-| A 股市值、PE_TTM、换手、量比 | 腾讯行情 `qt.gtimg.cn` | 只有当日快照 → 回看历史日时用「不晚于该日的最近一份」并在页头标注快照日 |
+| A 股市值、PE_TTM、换手、量比 | **tushare `daily_basic`**（`theme_data.py dbquotes`，按 `trade_date` 取） | 历史日可回补（与腾讯当日快照同口径同单位），所以 `quote/` 现在是「一天一份真值」；量比 / 换手定义与腾讯略有差异，跨源比较时注意 |
+| A 股市值、PE_TTM、换手、量比（当日兜底源） | 腾讯行情 `qt.gtimg.cn` | 只有当日快照 → 当日跑 `quotes` 用它；历史日一律走 `dbquotes` |
 | A 股日线（60/250 日高低、40 日走势） | 腾讯 `ifzq` 前复权日线 | 每只保留最近 260 根，页面取 60/250/40 窗口 |
 | A 股 PE_NTM | tushare `report_rc` 研报盈利预测 | `NTM = w×FY1 + (1−w)×FY2`，`w = 1 − 当年已过天数/365`；每家机构取窗口内最新年报口径，剔除 180 天无更新，取中位数 |
 | 基准（沪深300 / 创业板指 / 恒生科技） | 腾讯指数（当日快照）+ 腾讯 K 线（历史） | **超额口径**：A 股 41 家用沪深300（宽基 beta）+ 创业板指（同风格）；港股 13 家用恒生科技（同市场）。历史日一律用 K 线切到当日，只有「当天自己那份 `quote/`」才用快照——否则回溯旧日时沪深300 会变成一条常量线 |
 | 港股中位涨跌（历史） | `data/hk/kline.csv`（tushare `hk_daily` 逐股，腾讯兑底） | 只存日收益 `pct`，不存价格：前复权是「对齐最新收盘」，价格会在增量合并的接缝处跳；有 `hk/YYYYMMDD.csv` 当日快照时以快照为准 |
-| 港股快照（价格/成交额/市值/PE_TTM） | 腾讯 `qt.gtimg.cn`（`hk` 前缀） | 字段位与 A 股不同 |
-| 港股日线 | **tushare `hk_daily`**（主）/ 腾讯 `hkfqkline`（兜底） | 代理单次区间上限约 1 年 → 分段往回拉；`hk_daily` 未复权但 `pre_close` 已按除净调整，故复权收益 = `pct_chg` 累乘；tushare 港股 T+1 才出当天，用快照补最后一根 |
+| 港股快照（价格/成交额/市值/PE_TTM） | 腾讯 `qt.gtimg.cn`（`hk` 前缀） | 字段位与 A 股不同；接口只给当下。历史日由 `backfill_hk.py` 还原：**未复权收盘**（真价）× 快照股本 = 市值，PE 按市值比折算（见「已知缺口」） |
+| 港股日线 | **tushare `hk_daily`**（主）/ 腾讯 `hkfqkline`（兜底） | 代理单次区间上限约 1 年 → 分段往回拉；`hk_daily` 未复权但 `pre_close` 已按除净调整，故复权收益 = `pct_chg` 累乘，同时把**未复权收盘**（`raw` 列）一起存下来给市值/PE 用；tushare 港股 T+1 才出当天，用快照补最后一根 |
 | 港股 PE_NTM | Yahoo Finance `earnings_estimate` | 与 A 股同公式、按各公司财年（阿里/联想 3 月年结）；港股 EPS 多为人民币，按当日 `CNYHKD` 折港元；Yahoo 自己的 `forwardPE`（FY1 口径）存 `yahoo_fwd_pe` 对账 |
-| 板块中位/量能 | 东财概念板块（`em_cons.csv`）+ 盘后包 | 板块中位 = 成分等权中位；成分表是静态基线，板块调整需重新抓 |
+| 板块中位/量能 | 东财概念板块（`em_cons.csv`）+ 盘后包 | 板块中位 = 成分等权中位；**第 3 节象限图的灰点只算名单内成分**（与彩点同一样本，可直接比位置），表格里仍是全成分（市场口径）；成分表是静态基线，板块调整需重新抓 |
 
 ## 已知缺口（按影响排序）
 
 1. **港股前瞻 PE 的机构覆盖薄**：13 家都能算，但小票只有 1–4 家机构（天岳先进 1 家），
    腾讯 32 家、阿里 19 家。图 7 里港股是空心点，口径相同、机构少的别逐格比。
-2. **港股历史只有从建库那天起累积的快照**：`hk/20261028.csv` 只有当日列；
-   5/10/20 日、量能、走势靠日线算得出，但历史日的市值/PE 快照无法回补。
-   补历史页时如果那天没有 `hk/<day>.csv`，页面会挂「港股缺失」提示，港股 13 家留空而不是拿别的日期充数。
+2. **港股历史快照是「按收盘还原」，不是腾讯当天的原值**：`hk/<day>.csv` 只有当天跑过才有（腾讯接口只给当下；
+   tushare 港股**没有**每日指标层 —— 常被引用的 `hk_dailybasic` 这个接口在 Tushare 根本不存在，`hk_daily` 有、`hk_daily_adj` 没有）。
+   历史日由 `backfill_hk.py` 生成：价格 = `hk/kline.csv` 的 `raw`（tushare `hk_daily` 未复权收盘，真价），
+   市值 = 价格 × 锚点快照隐含股本，PE_TTM / PE_NTM = 锚点快照的 PE × 市值比（净利与共识只给当下，这两列是折算）。
+   实测：用该方法重算 20261030 的市值，与腾讯当天快照差中位 **0.1%**；`00700` 的 PE_TTM 全程 16.1 → 14.0、逐日变化中位 1.3%，无跳变。
+   两个已知偏差：① 股本只锚定一次，期间增发/回购不反映（锚点选「列最全的最新一份快照」，全历史共用，避免锚点边界跳变）；
+   ② 财报口径的 `eps_ttm` 与腾讯当日 PE 能差 0–5%，所以有快照的日子（20261028 / 20261030）与还原日的 PE 会有一次小台阶，这是真值 vs 折算的差。
+   `hk_fina_indicator` 里虽然有 `eps_ttm` / `issued_common_shares`，但**股本字段明显滞后**（实测 09903 天数智芯只有真实股本的 1/3，
+   市值会错 −69%），所以不用它做股本源。港股休市日（如 20261019 重阳节）没有 `hk/kline.csv` 记录，页面挂「港股当日休市」。
+   注意：港股回补/还原的说明不占页顶，而是写在第 7 节「口径 · 数据来源」的折叠块里——页顶只留「确实没数据」的提示。
 3. **Yahoo 会间歇限速（429）**：共识按股票缓存、3 天刷新；限速或超时时沿用上一份并记 `cons_date`。
    首次建库若撞上限速，该家当天退回 PE_TTM，页面会标 `TTM`。
-4. **A 股共识只覆盖 40/41 家**（`report_rc` 无更新的剔除），且有 180 天新鲜度要求。
+4. **A 股共识覆盖 41/41 家**：`report_rc` 有 180 天新鲜度要求，个别小票的研报只到几个月前，
+   对应日期的窗口里可能一家机构都没有 → 当天退回 PE_TTM。`fetch_consensus.py` 的口径按「参数那天的视角」算
+   （窗口与新鲜度都按 `day`），所以补历史不会前视；`--offline` 用 `.cache/consensus/` 里的原文按日重算。
 5. **板块成分是静态基线**（12,729 条 / 77 板块，其中 5 个板块可能被东财截断）；
    更新需要重抓东财概念成分。
-6. `quote/` 快照按「最近一份 ≤ 数据日」取用，回看很久以前的日期时市值/PE 会略偏（股本变化慢，影响小）。
+6. `quote/` 现在是按日期一份真值（`theme_data.py dbquotes <day>`），页面不再需要「借用某个快照日」；
+   只有当你手上那天还没回补过，才会退回「最近一份 ≤ 数据日」并挂提示。
 
 ## 字段速查
 
@@ -155,8 +197,10 @@ deploy.bat                  双击 commit + push 到 GitHub
 - `data/consensus/*.csv`：`code6, ts_code, date, fy1_med, fy2_med, n_brokers, w, ntm_yi, p25, p75`
 - `data/hk/*.csv`：`hk_code, name, price, pct_chg, amount_yi, total_mv_yi, pe_ttm, pe_ntm,
   n_brokers, cons_date, fy0_eps, fy1_eps, eps_ccy, fy0_end, yahoo_fwd_pe, hkd_cny, hist_src,
-  amt_20d, amt_mult, ret5, ret10, ret20, ret_all, dist_hi60, dist_lo250, sigma60, spark`
+  amt_20d, amt_mult, ret5, ret10, ret20, ret_all, dist_hi60, dist_lo250, sigma60, turnover,
+  float_mcap_yi, spark, basis, approx`（`basis` = `snapshot` 真实快照 / `raw` 未复权收盘还原 / `chain` 日收益链近似）
 - `data/kline/daily.csv`：`code, date, open, close, high, low, volume`（前复权长表）
+- `data/hk/kline.csv`：`hk_code, date, pct, amount_yi, raw`（`pct` 除净口径日收益；`raw` 未复权收盘，市值/PE 用）
 - `data/gs50.csv`：`name_cn, name_en, gs_ticker, lists, ai_layer, ai_sector, market, a_code6,
   hk_code, trackable`
 
@@ -165,7 +209,7 @@ deploy.bat                  双击 commit + push 到 GitHub
 1 温度计 · 2 广度与分化 · 3 结构轮动 · 4 名单 vs 板块 · 5 异动榜 · 6 全表 · 7 估值（贵不贵 × 有没有人追）· 8 明天盯什么（规则生成）· 9 口径与积累
 
 另有一页 `docs/index.html`（首页门厅）：当天的结论当 H1、四项读数（温度 / A 股中位 / 超额 / 成交占比）、
-37 期温度史、最近五期列表，以及「进入本期复盘 / 全部 37 期」两个入口。不自动跳转，可收藏。
+38 期温度史、最近五期列表，以及「进入本期复盘 / 全部 38 期」两个入口。不自动跳转，可收藏。
 
 另有一页 `docs/archive.html`：最新一期（日期 + 温度 + 中位 + 超额）/ 区间平均温度 / 日均中位 / 跑赢基准天数 / 最新港股中位，
 三张图（温度分折线、A 股中位柱 + 沪深300 / 创业板指虚线、港股中位柱 + 恒生科技虚线）和逐日表（14 列：温度、A 股中位、涨跌、新高、成交额、

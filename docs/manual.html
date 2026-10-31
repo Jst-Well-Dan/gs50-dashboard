@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GS50 每日复盘看板 · 项目说明</title>
+<style>
+:root{--bg:#0e1116;--panel:#161b22;--line:#232b36;--ink:#e6edf3;--dim:#8b949e;
+--up:#f85149;--down:#3fb950;--part:#d29922;--accent:#58a6ff;--accent2:#bc8cff;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+-webkit-font-smoothing:antialiased}
+.shell{max-width:1080px;margin:0 auto;padding:0 22px 90px}
+header.top{position:sticky;top:0;z-index:9;background:rgba(14,17,22,.94);backdrop-filter:blur(8px);
+border-bottom:1px solid var(--line);margin:0 -22px;padding:12px 22px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+header.top .brand{font-weight:700;letter-spacing:.3px}
+header.top .brand span{color:var(--accent)}
+header.top a{color:var(--dim);text-decoration:none;font-size:13px;border:1px solid var(--line);
+padding:3px 9px;border-radius:999px}
+header.top a:hover{color:var(--ink);border-color:var(--accent)}
+h1{font-size:30px;line-height:1.3;margin:34px 0 6px}
+h1 .u{color:var(--accent)}
+.sub{color:var(--dim);font-size:14px;margin:0 0 26px}
+h2{font-size:21px;margin:44px 0 12px;padding-left:11px;border-left:3px solid var(--accent)}
+h2 .n{color:var(--dim);font-family:var(--mono);font-size:15px;margin-right:8px}
+h3{font-size:16px;margin:26px 0 8px;color:#cdd9e5}
+p{margin:11px 0}
+code{font-family:var(--mono);font-size:12.6px;background:#1b2230;border:1px solid var(--line);
+border-radius:5px;padding:1px 5px;color:#c9d6e2;white-space:nowrap}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.4px;background:var(--panel);
+border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{padding:8px 11px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#1b2230;color:#cdd9e5;font-weight:600;font-size:12.6px;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.mono,th.mono{font-family:var(--mono);font-size:12.2px}
+.ok{color:var(--up);font-weight:600}
+.no{color:var(--dim);font-weight:600}
+.half{color:var(--part);font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:18px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card .v{font-family:var(--mono);font-size:23px;font-weight:700;letter-spacing:-.4px}
+.card .k{color:var(--dim);font-size:12.6px;margin-top:3px}
+.warn{border:1px solid #4a3a14;background:#191505;border-radius:9px;padding:11px 14px;margin:14px 0;
+font-size:13.4px;color:#e3d7bd}
+.warn b{color:#f0d9a0}
+.note{border:1px solid #1f3a2a;background:#0d1a14;border-radius:9px;padding:11px 14px;margin:14px 0;
+font-size:13.4px;color:#cfe6d8}
+.note b{color:#8fe0b0}
+pre{background:#11161e;border:1px solid var(--line);border-radius:10px;padding:13px 15px;overflow-x:auto;
+font-family:var(--mono);font-size:12.4px;line-height:1.65;color:#c9d6e2}
+pre .c{color:#6f7d8c}
+ul,ol{margin:10px 0 10px 4px;padding-left:20px}
+li{margin:6px 0}
+footer{border-top:1px solid var(--line);margin-top:50px;padding-top:16px;color:var(--dim);font-size:12.8px}
+footer a{color:var(--accent);text-decoration:none}
+.tight td{padding:6px 10px}
+details.fine{margin:12px 0;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+details.fine>summary{cursor:pointer;padding:10px 14px;font-size:13.4px;color:#cdd9e5}
+details.fine .body{padding:0 14px 12px;color:#a9b6c3;font-size:13px;line-height:1.75}
+@media(max-width:720px){
+  body{font-size:14px}
+  h1{font-size:23px}
+  h2{font-size:18px}
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;font-size:12.4px}
+  th,td{padding:6px 8px}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<header class="top">
+  <span class="brand">GS50 <span>·</span> 项目说明</span>
+  <a href="index.html">首页门厅</a>
+  <a href="archive.html">历史总览</a>
+  <a href="20261030.html">最新一期</a>
+</header>
+
+<h1>这个看板的数据是<span class="u">从哪来的</span></h1>
+<p class="sub">54 家 AI 名单（A 股 41 / 港股 13）当探针的每日复盘页。这一页只讲一件事：<b>每个数字是谁给的、谁在用、哪些真的拿不到</b>。</p>
+
+<div class="cards">
+  <div class="card"><div class="v">38</div><div class="k">已归档期数（2026-09-01 ~ 10-30）</div></div>
+  <div class="card"><div class="v">41/41</div><div class="k">A 股估值与共识覆盖</div></div>
+  <div class="card"><div class="v">13/13</div><div class="k">港股覆盖（10-19 休市除外）</div></div>
+  <div class="card"><div class="v">5</div><div class="k">外部数据源</div></div>
+  <div class="card"><div class="v">0</div><div class="k">付费接口 / API Key 依赖<br><span style="font-size:12px">（除 tushare 代理 token）</span></div></div>
+</div>
+
+<h2><span class="n">01</span>它是什么，不是什么</h2>
+<p><b>是</b>：每天收盘后跑一遍流水线，把全市场盘后包 + 名单快照 + 共识 + 港股日线，算成一张单文件 HTML
+（温度 / 广度分化 / 结构轮动 / 名单 vs 板块 / 异动 / 全表 / 估值），并按日永久归档。</p>
+<p><b>不是</b>：不是组合，没有权重、没有回测、没有买卖建议。54 家是采样点，用来读「AI 这条线在中国的温度、广度、轮动与背离」。</p>
+
+<h2><span class="n">02</span>数据覆盖现状</h2>
+<table class="tight">
+<thead><tr><th>数据集</th><th class="mono">data/</th><th>份数</th><th>粒度</th><th>来源</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>全市场盘后包</td><td class="mono">mkt/YYYYMMDD.csv</td><td>38</td><td>5,500+ 只 / 天</td><td>通达信官网 zip</td><td class="ok">真值</td></tr>
+<tr><td>A 股估值快照</td><td class="mono">quote/YYYYMMDD.csv</td><td>38</td><td>41 家 / 天</td><td>tushare <code>daily_basic</code></td><td class="ok">真值</td></tr>
+<tr><td>A 股卖方共识</td><td class="mono">consensus/YYYYMMDD.csv</td><td>38</td><td>41 家 / 天</td><td>tushare <code>report_rc</code></td><td class="ok">真值（按当日口径重算）</td></tr>
+<tr><td>A 股 + 基准日线</td><td class="mono">kline/daily.csv</td><td>260 交易日</td><td>41 家 + 6 基准</td><td>腾讯 qfq 日线</td><td class="ok">真值</td></tr>
+<tr><td>港股日线</td><td class="mono">hk/kline.csv</td><td>260 交易日</td><td>13 家（涨跌/成交额/未复权收盘）</td><td>tushare <code>hk_daily</code></td><td class="ok">真值</td></tr>
+<tr><td>港股快照</td><td class="mono">hk/YYYYMMDD.csv</td><td>37</td><td>13 家 / 天</td><td>腾讯快照 + 还原</td><td class="half">价/量真值，市值/PE 折算，共识 7 列为空</td></tr>
+<tr><td>板块成分基线</td><td class="mono">em_cons.csv</td><td>1</td><td>77 板块 / 12,729 条</td><td>东财（静态）</td><td class="ok">静态基线</td></tr>
+</tbody></table>
+
+<h2><span class="n">03</span>谁在用哪个接口</h2>
+<p>所有出网请求一共 6 个域名。<b>「调用方」是脚本里的函数名</b>，可以直接搜到。</p>
+<table>
+<thead><tr><th>接口 / 端点</th><th>提供方</th><th>调用方</th><th>产出什么</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td class="mono">g4day/YYYYMMDD.zip</td><td>通达信官网</td><td class="mono">theme_data.fetch_package()</td>
+    <td>全市场收盘价、成交额、涨跌停标记 → <code>mkt/</code></td><td class="ok">每天用</td></tr>
+<tr><td class="mono">qt.gtimg.cn/q=sh…（A 股 + 指数）</td><td>腾讯行情</td><td class="mono">theme_data.tencent_quotes()</td>
+    <td>名单 + 基准的当日快照（市值/PE/换手/量比/PB）→ <code>quote/&lt;当天&gt;</code></td>
+    <td class="half">仅当日兜底（历史已改 daily_basic）</td></tr>
+<tr><td class="mono">qt.gtimg.cn/q=hk…</td><td>腾讯行情</td><td class="mono">fetch_hk.quote()</td>
+    <td>港股当日报价、总市值、PE_TTM、成交额</td><td class="half">只有跑的那天有</td></tr>
+<tr><td class="mono">web.ifzq.gtimg.cn /appstock/app/fqkline</td><td>腾讯 K 线<br>（另有 proxy.finance.qq.com、ifzq.gtimg.cn 两个同源备胎）</td>
+    <td class="mono">theme_data.tencent_kline()</td>
+    <td>A 股 + 基准前复权日线（60/250 日高、40 日走势、基准日涨跌）</td><td class="ok">每天用</td></tr>
+<tr><td class="mono">hkfqkline/get</td><td>腾讯 K 线</td><td class="mono">fetch_hk.kline_tencent()</td>
+    <td>港股日线兜底（tushare 抽风时）</td><td class="half">兜底</td></tr>
+<tr><td class="mono">tl.kaixin8.top/tushare/sdk → daily_basic</td><td>tushare 代理</td><td class="mono">theme_data.db_quotes()</td>
+    <td>总市值、流通市值、换手、量比、PE_TTM、PB（按 trade_date 取历史）</td><td class="ok">38 天全覆盖</td></tr>
+<tr><td class="mono">…/report_rc</td><td>tushare 代理</td><td class="mono">fetch_consensus.fetch_one()</td>
+    <td>逐家研报盈利预测 → FY1/FY2 中位 → <code>PE_NTM</code>（按 as-of 日，无前视）</td><td class="ok">38 天全覆盖</td></tr>
+<tr><td class="mono">…/hk_daily</td><td>tushare 代理</td><td class="mono">fetch_hk.kline_tushare()</td>
+    <td>港股未复权收盘 <code>raw</code>、成交额、除净口径涨跌 → <code>hk/kline.csv</code></td><td class="ok">每天用</td></tr>
+<tr><td class="mono">…/hk_fina_indicator</td><td>tushare 代理</td><td class="mono">—（试过，未接入）</td>
+    <td>财报 EPS_TTM、股本</td><td class="half">可用，但股本滞后（见 04）</td></tr>
+<tr><td class="mono">…/hk_basic、hk_income</td><td>tushare 代理</td><td class="mono">—（试过，未接入）</td>
+    <td>港股基础信息 / 财报三表</td><td class="half">可用（income 要窄区间）</td></tr>
+<tr><td class="mono">…/hk_dailybasic、hk_daily_adj</td><td>—</td><td class="mono">—</td>
+    <td>本来想拿「港股每日市值 / PE」</td><td class="no">接口不存在（unknown_api）</td></tr>
+<tr><td class="mono">Yahoo earnings_estimate / info</td><td>yfinance</td><td class="mono">fetch_hk.consensus()</td>
+    <td>港股 FY0/FY1 EPS、覆盖机构数、财年结束日、forwardPE（3 天缓存）</td><td class="ok">当日用</td></tr>
+<tr><td class="mono">CNYHKD=X、USDHKD=X</td><td>yfinance</td><td class="mono">fetch_hk.fx_rates()</td>
+    <td>人民币→港元汇率（EPS 折算；取不到用常量 1.18 / 7.78）</td><td class="half">当日用</td></tr>
+<tr><td class="mono">em_cons.csv、em_board_stats.csv</td><td>东财（已落盘）</td><td class="mono">build_gs50_dashboard.load()</td>
+    <td>77 个 AI 概念板块成分、板块→层级映射</td><td class="half">静态基线</td></tr>
+</tbody></table>
+
+<div class="warn"><b>一句话回答「港股能不能全用 tushare 取」：</b>
+能取价格与成交额（<code>hk_daily</code>，含未复权收盘），能取财报（<code>hk_fina_indicator</code>），
+但<b>取不到「当日市值 / 当日 PE」</b>——港股没有 <code>daily_basic</code> 那一层，常见说法里的
+<code>hk_dailybasic</code> <b>在 Tushare 根本不存在</b>（<code>hk_daily_adj</code> 同样没有）。
+所以港股的市值 / PE 只能靠快照 + 折算，不能像 A 股那样按日期原样重取。</div>
+
+<h2><span class="n">04</span>港股：哪些是真值、哪些是折算、哪些拿不到</h2>
+<p>这是本页最需要说清的一段：历史日的 <code>hk/&lt;day&gt;.csv</code> 里，13 家的字段分三类。</p>
+
+<table>
+<thead><tr><th>字段</th><th>历史日怎么来的</th><th>类别</th></tr></thead>
+<tbody>
+<tr><td class="mono">price</td><td>tushare <code>hk_daily</code> 的<b>未复权收盘</b>（不是前复权）</td><td class="ok">真值</td></tr>
+<tr><td class="mono">pct_chg</td><td><code>hk_daily</code> 的 <code>pct_chg</code>（除净口径，含分红调整）</td><td class="ok">真值</td></tr>
+<tr><td class="mono">amount_yi</td><td><code>hk_daily</code> 的成交额</td><td class="ok">真值</td></tr>
+<tr><td class="mono">ret5 / ret10 / ret20 / dist_hi60 / dist_lo250 / sigma60 / spark</td><td>用本地价格序列重算</td><td class="ok">真值</td></tr>
+<tr><td class="mono">total_mv_yi</td><td>收盘 × <b>20261030 快照隐含股本</b>（快照市值 ÷ 快照价）</td><td class="half">折算</td></tr>
+<tr><td class="mono">pe_ttm</td><td>20261030 快照 PE_TTM × 市值比（净利视为不变）</td><td class="half">折算</td></tr>
+<tr><td class="mono">pe_ntm</td><td>20261030 快照 PE_NTM × 市值比（<b>共识只有这一版</b>）</td><td class="half">折算</td></tr>
+<tr><td class="mono">hkd_cny</td><td>沿用 20261030 的汇率（对 PE 影响 &lt;1%）</td><td class="half">折算</td></tr>
+<tr><td class="mono">turnover</td><td>成交额 ÷ 总市值（港股没有流通盘口径）</td><td class="half">换算</td></tr>
+<tr><td class="mono">n_brokers / cons_date / fy0_eps / fy1_eps / eps_ccy / fy0_end / yahoo_fwd_pe</td>
+    <td><b>留空</b>——Yahoo 只给「当下」一版共识，历史版本无法回溯，也不许拿今天的共识冒充那天</td><td class="no">拿不到</td></tr>
+<tr><td class="mono">float_mcap_yi</td><td><b>留空</b>——腾讯港股快照本身没有流通盘</td><td class="no">拿不到</td></tr>
+</tbody></table>
+
+<p>实测校验（拿 20261030 的真实快照反算）：</p>
+<ul>
+<li>市值 = 未复权收盘 × 快照股本，与腾讯当天快照<b>差中位 0.1%</b>；</li>
+<li><code>00700</code> 的 PE_TTM 38 期全程 <b>16.12 → 14.01</b>，逐日变化中位 1.3%，没有跳变；</li>
+<li>只有「快照日 vs 折算日」交接处会有一次小台阶（20261028 / 20261030 是真快照，其余是折算）。</li>
+</ul>
+
+<details class="fine"><summary>为什么不用 <code>hk_fina_indicator</code> 的股本和 EPS 做「真值」？（点开看实测数据）</summary>
+<div class="body">
+<p>看起来更正确：<code>hk_fina_indicator</code> 里有 <code>eps_ttm</code>、<code>issued_common_shares</code>，
+市值 = 收盘 × 真实股本、PE = 收盘 ÷ eps_ttm，全是财报口径。实测两个坑：</p>
+<p><b>① 股本字段明显滞后。</b><code>09903 天数智芯</code> 的 <code>issued_common_shares</code> 只有 2.54 亿股，
+按快照反推真实股本 8.07 亿股 → 用它算市值会错 <b>−69%</b>（新股增发后供应商没跟上）。</p>
+<p><b>② EPS 口径与腾讯当日 PE 差 0–5%，个别标的更大。</b><code>06082 壁仞科技</code> 在 20261028 与 20261030
+两份快照之间，供应商把 TTM 亏损口径改过一次，PE 从 −73.8 变成 −3.0。混用「财报 PE」与「快照 PE」，
+会在快照日与非快照日的交界处留下台阶——比统一折算更难读。</p>
+<p>结论：<b>价格用真值、股本锚定一次、PE 按市值比折算</b>，是这套数据里最不容易出错的组合；
+这也正好是页面第 7 节「口径 · 数据来源」里那句「港股（日期，按收盘还原）」的意思。</p>
+</div></details>
+
+<h2><span class="n">05</span>A 股：口径与历史回补</h2>
+<table class="tight">
+<thead><tr><th>字段</th><th>来源</th><th>历史可回补？</th></tr></thead>
+<tbody>
+<tr><td>收盘价 / 涨跌 / 成交额 / 涨跌停</td><td>通达信盘后包（按日期下载，2024-12 的包都还在）</td><td class="ok">可（原样重取）</td></tr>
+<tr><td>总市值 / 流通市值 / 换手 / 量比 / PE_TTM / PB</td><td>tushare <code>daily_basic</code>（按 <code>trade_date</code>）</td><td class="ok">可（原样重取）</td></tr>
+<tr><td>PE_NTM（GS 口径核心）</td><td>tushare <code>report_rc</code> + <code>NTM = w×FY1 + (1−w)×FY2</code></td><td class="ok">可（按 as-of 日重算，不前视）</td></tr>
+<tr><td>60 / 250 日高、40 日走势、σ60</td><td>腾讯 qfq 日线</td><td class="half">可，但前复权会随除权重锚（微差）</td></tr>
+<tr><td>板块中位 / 板块量能</td><td><code>em_cons.csv</code>（静态成分）+ 盘后包</td><td class="half">成分是静态基线，板块调整需重抓；第 3 节象限图的灰点只算名单内成分（与彩点同口径），表格里的板块中位是全成分（市场口径）</td></tr>
+</tbody></table>
+<p>腾讯的 <code>quote/</code> 快照只有「当下」一个时点，所以历史上曾经出现过「拿 10-31 的快照去算 10-30」的错位。
+现在的规则是：<b>先确认这天的盘后包存在，再让快照落盘</b>；快照文件名永远等于「真有交易的那一天」。</p>
+
+<h2><span class="n">06</span>怎么重跑 / 怎么回补</h2>
+<pre><span class="c"># 一天（抓数 → 出页 → 归档；非交易日会自动退到最近交易日）</span>
+python scripts/run_daily.py
+python scripts/run_daily.py 20261029
+python scripts/run_daily.py --rebuild            <span class="c"># 不抓数，用已有 data/ 重出页面</span>
+python scripts/run_daily.py --rebuild --all       <span class="c"># 38 页全重出（约 3 分钟）</span>
+
+<span class="c"># 补历史：A 股估值</span>
+for d in $(ls data/mkt | sed 's/.csv//'); do python scripts/theme_data.py dbquotes $d; done
+
+<span class="c"># 补历史：A 股共识（先联网把原始研报表缓存拉宽，再按日离线重算）</span>
+python scripts/fetch_consensus.py 20261030 --force --window=250
+for d in $(ls data/mkt | sed 's/.csv//'); do python scripts/fetch_consensus.py $d --offline --force; done
+
+<span class="c"># 补历史：港股（日线先补到最新，再由快照锚点还原每天）</span>
+python scripts/build_hk_kline.py 20261030 --force
+python scripts/backfill_hk.py                     <span class="c"># 只补缺的交易日</span>
+python scripts/backfill_hk.py --all               <span class="c"># 已有真实快照的日子也补（只填空列）</span></pre>
+
+<h2><span class="n">07</span>提示长在哪、怎么读</h2>
+<p><b>页顶黄条只放「确实缺数据」的情况</b>；「这些数是怎么算出来的」一律写进第 7 节
+<b>口径 · 数据来源</b> 的折叠块里（不占版面，需要时展开看）。</p>
+<table class="tight">
+<thead><tr><th>提示</th><th>位置</th><th>含义</th><th>该信到什么程度</th></tr></thead>
+<tbody>
+<tr><td><b>港股（日期，按收盘还原）</b></td><td>口径 · 数据来源</td><td>这天没有腾讯快照，港股价格用 tushare 未复权收盘，市值/PE 按市值比折算</td><td>价格、涨跌、成交额、动量可直接用；PE 看结构、别读绝对值到小数</td></tr>
+<tr><td><b>港股（日期，近似回补）</b></td><td>口径 · 数据来源</td><td>连未复权收盘都没有，用日收益链从锚点推</td><td>同上，再降一档（金额只到百分位量级）</td></tr>
+<tr><td><b>港股当日休市</b></td><td>页顶黄条</td><td>港股当天不交易（如 20261019 重阳节），不是数据缺失</td><td>港股那几行本来就该是空的</td></tr>
+<tr><td><b>回溯归档页</b></td><td>页顶黄条</td><td>该日的估值字段借用了另一个快照日</td><td>只在旧数据没回补时才会出现；现在 38 期都不该有</td></tr>
+</tbody></table>
+
+<h2><span class="n">08</span>目录与执行顺序</h2>
+<pre>scripts/
+  run_daily.py              唯一入口：串起下面四步（含缺页自愈）
+  theme_data.py             盘后包 / 腾讯行情 / 腾讯 K 线 / tushare daily_basic
+  fetch_hk.py               港股：腾讯快照 + hk_daily 日线 + Yahoo 共识
+  build_hk_kline.py         港股日收益长表 hk/kline.csv（pct / amount / raw）
+  backfill_hk.py            历史日港股还原（未复权收盘 × 快照股本）
+  fetch_consensus.py        A 股卖方共识 → PE_NTM（按 as-of 日）
+  build_gs50_dashboard.py   出单日页面（--out / --summary）
+  build_archive.py          历史总览 + 首页门厅
+  tushare_client.py         tushare 代理客户端（2.5s 限速 + 退避重试）
+
+data/     mkt / quote / kline / consensus / hk / em_cons.csv / em_board_stats.csv / gs50.csv
+docs/     YYYYMMDD.html（38 份，永不覆盖）/ index.html / archive.html / data/*.json
+          manual.html（本页）</pre>
+<p>流水线四步：<b>①抓数</b>（盘后包 → 回补历史 → 港股 → A 股快照 → 日线）→ <b>②共识</b>（逐家研报，最慢）
+→ <b>③出页</b>（2 秒）→ <b>④归档</b>（总览 + 门厅）。每一步都能单独跑，失败重跑不会写坏已有文件。</p>
+
+<h2><span class="n">09</span>已知缺口（按影响排序）</h2>
+<ol>
+<li><b>港股前瞻 PE 的机构覆盖薄</b>：13 家都能算，但小票只有 1–4 家机构（天岳先进 1 家），腾讯 32 家、阿里 19 家。</li>
+<li><b>港股历史市值 / PE 是折算</b>：股本只锚定一次，期间增发 / 回购不反映；共识只有一版，历史 PE_NTM 不能回溯。</li>
+<li><b>Yahoo 会间歇限速（429）</b>：共识按股票缓存 3 天，限速时沿用上一份并记 <code>cons_date</code>。</li>
+<li><b>A 股共识有 180 天新鲜度</b>：个别小票研报稀疏，某天的窗口里可能一家机构都没有 → 该家退回 PE_TTM。</li>
+<li><b>板块成分是静态基线</b>（77 板块 / 12,729 条），东财调整板块时不自动跟随。</li>
+<li><b>日线只留最近 260 根</b>：一年半以前的日子无法重算动量（当前 3 个月完全够用）。</li>
+</ol>
+
+<footer>
+  <p>线上：<a href="https://jst-well-dan.github.io/gs50-dashboard/">jst-well-dan.github.io/gs50-dashboard</a>　·　
+  入口：<a href="index.html">首页</a> / <a href="archive.html">历史总览</a> / <a href="20261030.html">最新一期</a></p>
+  <p>本页是静态文档，数据口径与脚本注释同源；数字若与看板冲突，以看板当天那一页为准（它固化了当时的输入）。</p>
+</footer>
+
+</div>
+</body>
+</html>

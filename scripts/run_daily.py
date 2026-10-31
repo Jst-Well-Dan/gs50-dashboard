@@ -105,6 +105,18 @@ def main():
                 print(f"=== {day} 没有盘后包（非交易日或还没发布）→ 跳过本次运行 ===", flush=True)
                 return
             steps = steps[1:]
+        else:
+            # 非云端：先把盘后包拿到手，确认这天真有交易，再让快照落盘。
+            # 否则周末/节假日跑会把「最近一个交易日的快照」存成 <今天>.csv，
+            # 回头出页时那份「未来快照」会把涨跌、港股、估值全都错位一天（10-30 那次就这样）。
+            run(f"1/4 抓数 · 盘后包（{day}）", [td, "pkg", day])
+            if not os.path.exists(os.path.join(ROOT, "data", "mkt", f"{day}.csv")):
+                prev = latest_mkt_day() or day
+                print(f"! {day} 没有盘后包（非交易日 / 还没发布）→ 快照按最近交易日 {prev} 落盘、页面也出 {prev}",
+                      flush=True)
+                day = prev
+            run(f"1/4 抓数 · 回补历史", [td, "backfill", "30"])
+            steps = steps[2:]
         if "--no-hk" not in flags:
             steps.append(("港股 13 家", [td, "hk", day]))
             steps.append(("港股日线（归档用）", [os.path.join("scripts", "build_hk_kline.py"), day]))
