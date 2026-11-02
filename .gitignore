@@ -14,3 +14,6 @@ data/quote/
 data/kline/
 data/consensus/
 data/hk/
+
+# 导出给社交媒体的图片（一天约 1.8 MB，需要时本地重跑 scripts/export_figures.py）
+exports/
