@@ -2,6 +2,7 @@ name: daily
 
 # 云端每天跑一遍完整流水线（抓数 → 出页面 → 提交 docs/），Pages 源 = main /docs，push 即上线。
 # GitHub 的 cron 用 UTC：09:30 UTC = 17:30 北京时间。
+# 注：新建仓库后 cron 可能长期不注册（event=schedule 一次都不出现），改一次本文件 push 即可让 GitHub 重新登记定时器。
 on:
   schedule:
     - cron: '30 9 * * 1-5'    # 17:30 北京时间
