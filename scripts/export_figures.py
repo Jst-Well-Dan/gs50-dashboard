@@ -1,32 +1,29 @@
-"""把某一天报告 HTML 里的图，导出成适合发社交媒体的 PNG。
+"""把某一天报告 HTML 里的图，导出成 4 张适合发社交媒体的 PNG（只出这 4 张）。
 
 用法:
-    python scripts/export_figures.py                    # 最新一期，出 4:5 竖版 + 宽图备份
+    python scripts/export_figures.py                    # 最新一期
     python scripts/export_figures.py --date 20261030     # 指定日期
-    python scripts/export_figures.py --preset social     # 只出竖版（默认 both）
-    python scripts/export_figures.py --preset raw        # 只出原始宽图
-    python scripts/export_figures.py --size 1080x1350    # 换画布（4:5 默认；1:1 用 1080x1080）
+    python scripts/export_figures.py --size 1080x1350    # 换画布（默认高度随内容，上限 4:5）
+    python scripts/export_figures.py --fit frame         # 强制 4:5 画幅
     python scripts/export_figures.py --scale 3           # 像素密度（默认 2x）
 
-输出（exports/<date>/）:
-    00_今日温度.png / 01..NN_*.png   4:5 竖版卡片：品牌+日期 / 章节+大标题 / 图 / 读数三连 / 页脚
-    variants/v*.png                  切 chip 才看到的备选图（同样是 4:5）
-    raw/**.png                       原始宽图（2188px 宽，做头图或精读时用）
-    manifest.json                    清单：文件、标题、章节、尺寸
+输出（exports/<date>/，就这 4 张，没有 variants/ raw/ manifest/ README）:
+    00_今日温度.png          封面：巨型温度读数 + 色带 + 指标卡 + 今日各层涨跌
+    01_广度与分化.png        章节卡：一章的图叠放
+    02_轮动结构.png
+    03_估值.png
 
 实现要点:
     - Playwright 打开真页面，样式/字体和网页一致，不重画；
     - 竖版卡片是「重新排版」：图内的标题行搬到 HTML 上放大，SVG 的 viewBox 按剩余内容收紧，
       裁掉图内上下留白，所以图在小屏上也更大一点；
-    - 每张图克隆到独立画布再截，chip 按钮、吸顶栏不会渗进来，源 HTML 不动；
-    - 4:5 卡片统一底部读数三连（温度 / 名单中位 / 超额），成套发布时像连载。
+    - 每张图克隆到独立画布再截，chip 按钮、吸顶栏不会渗进来，源 HTML 不动。
 """
 
 from __future__ import annotations
 
 import argparse
 import io
-import json
 import os
 import re
 import sys
@@ -44,18 +41,12 @@ MONO = "ui-monospace,Menlo,Consolas,monospace"
 
 FONT_SCALE = 1.12  # 图内字号放大倍数（网页按 1120px 宽设计，手机上要更大才好读）
 
-FIG_SUFFIX = {"5": "近5日", "20": "近20日", "all": "全部", "d": "今日"}
-
 INJECT_CSS = """
 .bar,.shell{visibility:hidden}          /* 只截独立画布 */
 #__stage{position:absolute;left:0;top:0;background:#0e1116;z-index:2147483647}
 #__stage .chart{margin:0}
 #__stage .comp h2{margin:0 0 12px}
 #__stage .comp .cards{margin:12px 0 0}
-.xfoot{margin-top:9px;padding-top:8px;border-top:1px solid #232b36;
-  display:flex;justify-content:space-between;align-items:baseline;gap:14px;
-  font:500 11.5px/1.4 @MONO@;color:#6e7681;letter-spacing:.03em}
-
 /* ---------- 4:5 竖版卡片（贴满画幅：窄边距 + 大字号 + 间距均分） ---------- */
 #__stage.s-card{display:flex;flex-direction:column;padding:40px 34px 26px;
   color:#e6edf3;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
@@ -304,26 +295,6 @@ JS_CARD = """
 }
 """
 
-# 原始宽图：把节点克隆到独立画布，只补一行页脚
-JS_RAW = """
-(A) => {
-  document.querySelectorAll('#__stage').forEach(n => n.remove());
-  const stage = document.createElement('div');
-  stage.id = '__stage';
-  stage.style.width = A.width + 'px';
-  stage.innerHTML = A.html;
-  const chart = stage.querySelector('.chart');
-  if (A.foot && chart) {
-    const d = document.createElement('div');
-    d.className = 'xfoot';
-    d.innerHTML = A.foot;
-    chart.appendChild(d);
-  }
-  document.body.appendChild(stage);
-  return true;
-}
-"""
-
 JS_CLEAR = "() => document.querySelector('#__stage')?.remove()"
 JS_GO_TOP = "() => window.scrollTo(0, 0)"
 
@@ -336,20 +307,6 @@ def clean_title(title: str, section: str) -> str:
     t = re.sub(r"[\\/:*?\"<>|]+", "_", t)
     t = re.sub(r"\s+", "_", t.strip())
     return t.strip("_")[:48] or "figure"
-
-
-def display_name(stem: str, suffix: str) -> str:
-    if not suffix or suffix in stem:
-        return stem
-    if suffix == "今日" and ("今天" in stem or "今日" in stem):
-        return stem
-    return f"{stem}_{suffix}"
-
-
-def fig_suffix(fig: str | None) -> str:
-    if not fig:
-        return ""
-    return FIG_SUFFIX.get(fig.split("_")[-1], fig)
 
 
 def settle(page, ms: int = 60) -> None:
@@ -455,90 +412,17 @@ def layer_bars(layers: list[dict]) -> str:
             + "".join(out) + "</div>")
 
 
-README_TMPL = """# {iso} 图片导出（发社交媒体用）
-
-源头：`docs/{date}.html`
-生成：`python scripts/export_figures.py --date {date}`（需要 Playwright，约 1 分钟）
-重跑会覆盖同名图片并重写本文件。
-
-画布宽度固定 {w}px，**高度跟着内容走**（上限 {maxh}），出图 {scale}x。
-每张图都是满的：既没有「一张横图飘在黑底中间」的留白，也没有重复的读数条。
-代价是各图高度不一，X、微博、公众号、小红书正文都正常显示；要等高的 4:5 就加 `--fit frame`。
-
-## 主推：一条多图帖
-
-| 顺序 | 文件 | 内容 | 像素 |
-|---|---|---|---|
-{rows}
-
-一张图 = 报告的一章。横图在竖版画幅里最多只占满宽度，一章的图叠起来才填满，
-阅读顺序也正好是报告的章节顺序。
-
-- 封面是海报版式：巨型温度读数 + 加粗色带 + 4 张指标卡 + 「今日各层涨跌」横条图，不写正文；
-- 章节卡把图内小标题搬成 HTML 大标题，viewBox 按内容收紧，图内字号 ×1.12；
-- `variants/` = 切 chip 才看得到的备选窗口，同样贴满排版，可直接替换主图；
-- `raw/` = 2188px 宽的原版（图内自带标题），做头图 / 横图 / 精读用；
-- `singles/` 默认不出，加 `--singles` 才把每张图单独出一份；
-- 读数三连（温度 / 名单中位 / 超额）默认不加，`--kpi` 可补回。
-
-## 换比例 / 更清晰
-
-```bash
-python scripts/export_figures.py --size 1080x1080   # 方图
-python scripts/export_figures.py --size 1080x1440   # 3:4 更高
-python scripts/export_figures.py --fit frame        # 强制 4:5 画幅
-python scripts/export_figures.py --scale 3          # 3x（3240px 宽）
-```
-
-## 配文草稿
-
-> {caption}
-
-`manifest.json` 里有每个文件的标题、章节、变体（chapter/variant/raw）与像素尺寸。
-"""
-
-
-def readme_caption(rows: list[dict]) -> str:
-    by = {r["k"]: r["v"] for r in rows}
-    t = by.get("温度计指数", "")
-    num, _, word = t.partition("·")
-    m, e = by.get("名单中位", ""), by.get("超额 vs 沪深300", "")
-    if not (num and m and e):
-        return "（这里写配文）"
-    return (f"AI 主题温度 {num.strip()} 分（{word.strip()}）。名单中位 {m}，"
-            f"超额 vs 沪深300 {e}。分层看谁最弱、谁最抗跌 → 见最后一张。")
-
-
-def write_readme(outdir: Path, made: list[dict], date: str, iso: str,
-                 cw: int, ch: int, scale: int, rows_src: list[dict] | None = None) -> None:
-    """顺手把发布说明书写出来，省得每次手写、也不会被清目录搞丢。"""
-    cap = readme_caption(rows_src or [])
-    order = [f for f in made if f.get("variant") in ("social", "chapter")]
-    rows = []
-    for i, f in enumerate(order, 1):
-        px = f["png"].replace("x", "×")
-        rows.append(f"| {i} | `{f['file']}` | {f['title']} | {px} |")
-    text = README_TMPL.format(
-        iso=iso, date=date, w=cw, maxh=f"{ch}px（4:5）", scale=scale, caption=cap,
-        rows="\n".join(rows) or "| — | — | — | — |")
-    (outdir / "README.md").write_text(text, encoding="utf-8")
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=None, help="报告日期 yyyymmdd，默认取 docs 下最新一天")
-    ap.add_argument("--preset", choices=["both", "social", "raw"], default="both")
     ap.add_argument("--size", default="1080x1350",
                     help="画布宽度 + 高度上限，WxH，默认 1080x1350（高度 ≤ 4:5）")
     ap.add_argument("--fit", choices=["content", "frame"], default="content",
                     help="content=画布高度随内容（贴满，默认）；frame=固定 4:5 画幅")
     ap.add_argument("--scale", type=int, default=2, help="像素密度倍数，默认 2")
     ap.add_argument("--out", default="exports", help="输出根目录，默认 exports/")
-    ap.add_argument("--only-visible", action="store_true", help="只出默认展示的图，跳过 chip 备选图")
     ap.add_argument("--kpi", action="store_true",
                     help="在图底加「本期读数」三连（温度/名单中位/超额），默认不加")
-    ap.add_argument("--singles", action="store_true",
-                    help="额外出一张图一帖的单图版（放 singles/，横图在 4:5 里偏空，默认不出）")
     args = ap.parse_args()
 
     date = args.date
@@ -555,17 +439,9 @@ def main() -> int:
 
     cw, ch = (int(x) for x in args.size.lower().split("x"))
     outdir = ROOT / args.out / date
-    vardir = outdir / "variants"
-    rawdir = outdir / "raw"
-    rawwdir = rawdir / "variants"
+    outdir.mkdir(parents=True, exist_ok=True)
     iso = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
-    social = args.preset in ("both", "social")
-    raw = args.preset in ("both", "raw")
-    singlesdir = outdir / "singles"
-    dirs = [outdir, vardir, rawdir, rawwdir] + ([singlesdir] if args.singles else [])
-    for d in dirs:
-        d.mkdir(parents=True, exist_ok=True)
-    made: list[dict] = []
+    made = 0
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -577,7 +453,7 @@ def main() -> int:
         page.wait_for_timeout(600)
 
         data = page.evaluate(JS_COLLECT)
-        width, charts = data["width"], data["charts"]
+        charts = data["charts"]
         page.evaluate(JS_GO_TOP)
         kpis = kpi_strip(data["sideRows"])
         meta = f"{iso} · {next((r['v'] for r in data['sideRows'] if r['k'] == '期次'), '')} 期"
@@ -598,94 +474,43 @@ def main() -> int:
             settle(page)
             info = shoot(page, target, args.scale)
             page.evaluate(JS_CLEAR)
+            print(f"  {str(target.relative_to(ROOT)):64s} {info['png']}")
             return info
 
         # ---------- 封面：温度计 + 当日指标卡 ----------
-        if social and data["gauge"] and data["s1cards"]:
+        if data["gauge"] and data["s1cards"]:
             t = next((r["v"] for r in data["sideRows"] if r["k"] == "温度计指数"), "")
             score, _, word = t.partition("·")
             hero = (f"<div class='hero'><div class='hn'>{score.strip()}"
                     f"<i>分</i></div><div class='hw'>{word.strip()}</div></div>")
             html = (hero + data["gauge"] + cover_cards(data["s1cards"])
                     + layer_bars(data.get("layers") or []))
-            target = outdir / "00_今日温度.png"
-            info = social_shot(
-                {"section": "§1 温度计", "html": html, "title": "今日温度"},
-                target,
-                cover=True,
-                sub="",
-                footR="温度计 0–100 分",
-            )
-            made.append({"file": target.name, "title": "今日温度（巨型读数 + 色带 + 指标卡 + 层涨跌条）",
-                         "section": "§1 温度计", "variant": "social", **info})
-            print(f"  {str(target.relative_to(ROOT)):64s} {info['png']}")
+            social_shot({"section": "§1 温度计", "html": html, "title": "今日温度"},
+                        outdir / "00_今日温度.png",
+                        cover=True, sub="", footR="温度计 0–100 分")
+            made += 1
 
         # ---------- 章节卡：一整章的图叠放，撑满 4:5（一张横图单独放会空掉一半） ----------
-        if social:
-            groups: dict[str, list] = {}
-            for it in charts:
-                if it["gauge"] or not it["visible"] or not it["section"]:
-                    continue
-                groups.setdefault(it["section"], []).append(it)
-            gno = 0
-            for sect, items in groups.items():
-                if len(items) < 2:
-                    continue
-                gno += 1
-                name = sect.split(" ", 1)[-1]
-                html = "".join(f"<div class='s-fig'>{x['html']}</div>" for x in items)
-                target = outdir / f"{gno:02d}_{clean_title(name, sect)}.png"
-                info = social_shot({"section": sect, "html": html, "title": name},
-                                   target, keepTitles=True, fit=True,
-                                   footR=f"{issue} · {len(items)} 张图")
-                made.append({"file": str(target.relative_to(outdir)).replace("\\", "/"),
-                             "title": name, "section": sect, "variant": "chapter", **info})
-                print(f"  {str(target.relative_to(ROOT)):64s} {info['png']}")
-
-        main_no = var_no = 0
+        groups: dict[str, list] = {}
         for it in charts:
-            if args.only_visible and not it["visible"]:
+            if it["gauge"] or not it["visible"] or not it["section"]:
                 continue
-            stem = display_name(clean_title(it["title"], it["section"]), fig_suffix(it["fig"]))
-            if it["visible"]:
-                main_no += 1
-                base = f"{main_no:02d}_{stem}"
-            else:
-                var_no += 1
-                base = f"v{var_no:02d}_{stem}"
-
-            # 竖版单图卡（默认不出：横图单独放进 4:5 会空掉一半，--singles 时才生成）
-            if social and not it["gauge"] and it["title"] and (args.singles or not it["visible"]):
-                target = (singlesdir if it["visible"] else vardir) / f"{base}.png"
-                info = social_shot(it, target)
-                made.append({"file": str(target.relative_to(outdir)).replace("\\", "/"),
-                             "title": it["title"] or it["section"], "section": it["section"],
-                             "variant": "single" if it["visible"] else "variant", **info})
-                print(f"  {str(target.relative_to(ROOT)):64s} {info['png']}")
-
-            # 原始宽图
-            if raw:
-                target = (rawdir if it["visible"] else rawwdir) / f"{base}.png"
-                page.evaluate(JS_RAW, {"html": it["html"], "width": width,
-                                       "foot": f"<span>{BRAND} · {iso}</span>"
-                                               f"<span>{it['section']}</span>"})
-                info = shoot(page, target, args.scale)
-                page.evaluate(JS_CLEAR)
-                made.append({"file": str(target.relative_to(outdir)).replace("\\", "/"),
-                             "title": it["title"] or it["section"], "section": it["section"],
-                             "variant": "raw", **info})
-                print(f"  {str(target.relative_to(ROOT)):64s} {info['png']}")
+            groups.setdefault(it["section"], []).append(it)
+        gno = 0
+        for sect, items in groups.items():
+            if len(items) < 2:
+                continue
+            gno += 1
+            name = sect.split(" ", 1)[-1]
+            html = "".join(f"<div class='s-fig'>{x['html']}</div>" for x in items)
+            social_shot({"section": sect, "html": html, "title": name},
+                        outdir / f"{gno:02d}_{clean_title(name, sect)}.png",
+                        keepTitles=True, fit=True, footR=f"{issue} · {len(items)} 张图")
+            made += 1
 
         browser.close()
 
-    (outdir / "manifest.json").write_text(
-        json.dumps({"date": date, "source": f"docs/{date}.html", "scale": args.scale,
-                    "social_canvas": f"{cw}x{ch}", "count": len(made), "figures": made},
-                   ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    write_readme(outdir, made, date, iso, cw, ch, args.scale, data["sideRows"])
-    print(f"\n共 {len(made)} 个文件 → {outdir}（README.md 已重写）")
+    print(f"共 {made} 张图 → {outdir}")
     return 0
 
 

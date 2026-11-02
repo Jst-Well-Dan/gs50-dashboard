@@ -41,31 +41,29 @@ python -m http.server 8000 --directory docs
 
 ## 导出图片（发社交媒体用）
 
-页面里的图都是内嵌 SVG，直接截屏会带侧栏和滚动条。这个脚本重新排版导出：
+页面里的图都是内嵌 SVG，直接截屏会带侧栏和滚动条。这个脚本重新排版导出，
+**只出 4 张**（`exports/<date>/`，没有 variants/ raw/ manifest/ README）：
 
 ```bash
-python scripts/export_figures.py                  # 最新一期：竖版 + 宽图备份
+python scripts/export_figures.py                  # 最新一期
 python scripts/export_figures.py --date 20261030  # 指定日期
-python scripts/export_figures.py --preset social  # 只出竖版
-python scripts/export_figures.py --preset raw     # 只出原始宽图
-python scripts/export_figures.py --singles        # 额外出一张图一帖的单图版
 python scripts/export_figures.py --kpi            # 图底加「本期读数」三连（默认不加）
 python scripts/export_figures.py --fit frame      # 强制 4:5 画幅（默认高度随内容）
 python scripts/export_figures.py --size 1080x1080 # 换宽度 / 高度上限
 python scripts/export_figures.py --scale 3        # 3x 像素密度（默认 2x）
 ```
 
+- `00_今日温度.png` 封面：巨型温度读数 + 加粗色带 + 4 张指标卡 + 「今日各层涨跌」横条图，不堆正文；
+- `01_广度与分化.png` / `02_轮动结构.png` / `03_估值.png` 章节卡：一章的两张图叠放，
+  阅读顺序正好是报告章节顺序；
 - 走 Playwright 打开真页面截图，字体、配色、图形与网页一致，不是重画；
 - **画布宽度固定 1080，高度随内容，上限 4:5**——横图在竖版里最多占满宽度，
-  一张图单独放必然上下空一半，所以「一张图 = 一章」：一章的两张图叠起来才贴满，
-  阅读顺序也正好是报告章节顺序（00 封面 + 01 广度与分化 + 02 轮动结构 + 03 估值）；
+  一张图单独放必然上下空一半，所以「一张图 = 一章」：一章的两张图叠起来才贴满；
 - 排版：图内小标题搬到 HTML 放大成 64px 标题（长标题自动降字号）、SVG viewBox 按内容收紧、
   图内字号 ×1.12；读数三连默认不出（四张都放就重复了，`--kpi` 可补回）；
-- 封面是海报版式：巨型温度读数 + 加粗色带 + 4 张指标卡 + 「今日各层涨跌」横条图，不堆正文；
-- 每张图克隆到独立画布再截，chip 按钮和吸顶栏不会渗进画面，源 HTML 不动；
-- `manifest.json` 记每个文件的标题、章节、变体、像素尺寸，`README.md`（发布顺序 + 配文）自动生成。
+- 每张图克隆到独立画布再截，chip 按钮和吸顶栏不会渗进画面，源 HTML 不动。
 
-`exports/` 不进仓库（一期约 4–6 MB），需要就本地重跑。
+`exports/` 不进仓库（一期约 1.2 MB），需要就本地重跑。
 
 ## 历史归档（为什么每天留一份）
 
