@@ -36,6 +36,18 @@ FT_S = 13.6   # 其余全部：副标 / 说明 / 标签 / 轴标 / 单元值
 UP, DOWN, FLAT = "#f85149", "#3fb950", "#8b949e"
 ACCENT, DIM, PURPLE = "#58a6ff", "#8b949e", "#bc8cff"
 
+# 仓库地址：页脚那个 GitHub 图标指这里。只有图标 + title，不占版面、不拉外部图片。
+REPO_URL = "https://github.com/Jst-Well-Dan/gs50-dashboard"
+GH_ICON = (f'<a class="gh" href="{REPO_URL}" target="_blank" rel="noopener"'
+           f' title="源码仓库：{REPO_URL}" aria-label="GitHub 源码仓库">'
+           '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 '
+           '5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94'
+           '-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87'
+           '.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21'
+           ' 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08'
+           ' 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01'
+           ' 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>')
+
 CSS = """
 :root{--bg:#0e1116;--panel:#161b22;--line:#232b36;--ink:#e6edf3;--dim:#8b949e;
 --up:#f85149;--down:#3fb950;--accent:#58a6ff;
@@ -97,6 +109,8 @@ font:12.6px/1.55 inherit;box-shadow:0 6px 14px #00000080;white-space:pre-line;ma
 [data-tip]:hover{filter:brightness(1.4)}
 footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:12.8px}
 footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
+footer a.gh{display:inline-flex;align-items:center;border-bottom:none;vertical-align:-3px}
+footer a.gh svg{width:15px;height:15px;fill:currentColor}
 /* 表头吸顶：只有在 .scroll 不自己当滚动容器时才真正贴着窗口（所以就放在 .scroll 之后） */
 @media (min-width:1100px){.scroll{overflow:visible}}
 /* 两张趋势图都是 1120 宽的虚拟画布：窗口窄到 <1240 就横向滑动，保住轴标字号 */
@@ -410,7 +424,7 @@ def build(docs_dir):
 
 <footer>AI 主题每日复盘 · 归档页生成于 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M}　·　
 {len(rows)} 期　·　重新生成：<code>python scripts/build_archive.py</code>　·　
-<a href="index.html">首页</a>　·　<a href="manual.html">项目说明</a></footer>
+<a href="index.html">首页</a>　·　<a href="manual.html">项目说明</a>　·　{GH_ICON}</footer>
 </div>
 <div id="tip"></div>
 {TIP_JS}
@@ -681,7 +695,7 @@ def hub(rows, last):
 
 <footer>AI 主题每日复盘 · 首页生成于 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M}　·　
 数据日 {dlabel(day)}{f'（页面生成于 {built}）' if built else ''}　·　
-<a href="archive.html">历史归档</a></footer>
+<a href="archive.html">历史归档</a>　·　{GH_ICON}</footer>
 </div>
 <div id="tip"></div>
 {TIP_JS}
