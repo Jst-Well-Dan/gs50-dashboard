@@ -374,6 +374,7 @@ def build():
 
     # ---------------- 港股中位（含历史）：hk/kline.csv 打底，hk/<day>.csv 当日覆盖
     hk_day_med = pd.Series(dtype=float)
+    hkd = pd.DataFrame()
     if os.path.exists("hk/kline.csv"):
         hkd = pd.read_csv("hk/kline.csv", encoding="utf-8-sig", dtype={"hk_code": str, "date": str})
         hkd["day"] = hkd.date.str.replace("-", "", regex=False)
@@ -385,6 +386,43 @@ def build():
             hb = pd.read_csv(f, encoding="utf-8-sig", dtype={"hk_code": str})
             if "pct_chg" in hb and hb.pct_chg.notna().any():
                 hk_day_med[d] = float(hb.pct_chg.median())
+
+    # ---------------- 60 日 / 今年以来：mkt 归档只有 len(days) 天，这两个窗口得用更长的序列
+    ret60, ret_ytd, ytd_partial = {}, {}, {}
+    y0 = f"{day[:4]}0101"
+    if not kline.empty:                                   # A 股：kline 前复权日线（约一年）
+        _k = kline.copy()
+        _k["d"] = _k.date.astype(str).str.replace("-", "", regex=False)
+        for code, grp in _k.groupby("code"):
+            s = grp.sort_values("d")
+            c = s.close.reset_index(drop=True)
+            dd = s.d.reset_index(drop=True)
+            if len(c) > 60:
+                ret60[code] = float(c.iloc[-1] / c.iloc[-61] - 1) * 100
+            pre = c[dd < y0]
+            if len(pre):
+                base = pre.iloc[-1]
+            else:                                          # 今年上市：从上市首日算，并在提示里标明
+                base = c.iloc[0]
+                ytd_partial[code] = dd.iloc[0]
+            if len(c) > 1 and base:
+                ret_ytd[code] = float(c.iloc[-1] / base - 1) * 100
+    if len(hkd):                                          # 港股：除净后日收益链 + 当日快照补最后一根
+        snap_hk = panel[panel.market == "HK"].set_index("code").pct_chg
+        for code, grp in hkd.groupby("hk_code"):
+            p = pd.Series(grp.pct.astype(float).values, index=grp.day.values).sort_index()
+            tp = snap_hk.get(code, float("nan"))
+            if p.index[-1] != day and tp == tp:
+                p.loc[day] = float(tp)
+            if len(p) > 60:
+                ret60[code] = float(((1 + p.iloc[-60:] / 100).prod() - 1) * 100)
+            yt = p[p.index >= y0]
+            if len(yt):
+                ret_ytd[code] = float(((1 + yt / 100).prod() - 1) * 100)
+                if not (p.index < y0).any():               # 日线链没盖到年初：按可得区间算，提示里写明起点
+                    ytd_partial[code] = yt.index[0]
+    panel["ret60"] = panel.code.map(ret60)
+    panel["ret_ytd"] = panel.code.map(ret_ytd)
     hk_pct = panel[panel.market == "HK"].pct_chg.dropna()
     theme_hk = {"n": int(len(hk_pct)), "median": float(hk_pct.median()) if len(hk_pct) else float("nan"),
                 "up": int((hk_pct > 0).sum()), "down": int((hk_pct < 0).sum())}
@@ -545,7 +583,7 @@ def build():
                           + f"{chr(10)}→ 均值 {float(sub.med.mean()):+.2f}%") if not sub.empty else ""
 
     return dict(gs=gs, panel=panel, day=day, days=days, stats=stats, theme=theme, bench=bench,
-                bench5=bench5, bench20=bench20, score=score, quote_day=quote_day,
+                bench5=bench5, bench20=bench20, score=score, quote_day=quote_day, ytd_partial=ytd_partial,
                 lay_amt=lay_amt, board_amt=board_amt, mood=mood, layer=layer_today, lay_day=lay_day,
                 eq_nav=eq_nav, eq_pct=eq_pct, m_med=m_med, bdf=bdf, cands=cands, moves=moves,
                 amt_ratio=amt_ratio, theme_amt_ratio=theme_amt_ratio, hi_n=hi_n,
@@ -670,8 +708,10 @@ def line_chart(days, series, title, sub, W=1120, H=300, fmt="{:.1f}%", zero=True
     ticks_x = list(range(0, n, step))
     if ticks_x[-1] != n - 1:
         ticks_x = [i for i in ticks_x if n - 1 - i >= step * 0.6] + [n - 1]
+    multiyear = days[0][:4] != days[-1][:4]        # 跨年（今年以来 / 全部）标到年，不然月份会重名
     for i in ticks_x:
-        p.append(f"<text x='{xx(i):.1f}' y='{H-B+16}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{days[i][4:6]}-{days[i][6:8]}</text>")
+        lab = f"{days[i][2:4]}/{days[i][4:6]}" if multiyear else f"{days[i][4:6]}-{days[i][6:8]}"
+        p.append(f"<text x='{xx(i):.1f}' y='{H-B+16}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{lab}</text>")
     labels = []
     for s in series:
         seg, started = [], False
@@ -1439,7 +1479,7 @@ footer a:hover{color:#a5ceff}
   /* 宽表：横向滑动看全 */
   .scroll{-webkit-overflow-scrolling:touch;padding-bottom:2px}
   .scroll>table{min-width:880px}
-  #t54{min-width:1000px}
+  #t54{min-width:1040px}
   thead th{position:static}
 }
 """
@@ -1605,6 +1645,15 @@ def main():
         return f"量能 {r.amt_mult:.2f}× = 今日 {r.amount_yi:.1f} 亿 / 前 20 日均 {r.amt_20d:.1f} 亿"
 
     # ---- 全表
+    ytd_partial = D.get("ytd_partial", {})
+    ret60_tip = esc("60 个交易日累计涨跌：A 股前复权日线，港股除净后日收益连乘")
+
+    def ytd_tip(code):
+        base = f"今年以来（{day[:4]} 年首个交易日算起）"
+        base += "：A 股前复权日线，港股除净后日收益连乘"
+        part = ytd_partial.get(code)
+        return esc(f"{base}；该股日线自 {part[4:6]}-{part[6:]} 起，按可得区间算" if part else base)
+
     table_rows = ""
     for _, r in panel.sort_values(["ai_layer", "pct_chg"], ascending=[True, False]).iterrows():
         pe = r.pe_ntm if not pd.isna(r.pe_ntm) else (r.pe_ttm if not pd.isna(r.pe_ttm) else float("nan"))
@@ -1619,36 +1668,71 @@ def main():
             f"<td>{r.market}</td>"
             f"<td style='text-align:right'{ds(r.pct_chg)}>{pct(r.pct_chg, 2)}</td>"
             f"<td style='text-align:right'{ds(r.ret5)}>{pct(r.ret5, 1)}</td>"
-            f"<td style='text-align:right'{ds(r.ret10)}>{pct(r.ret10, 1)}</td>"
             f"<td style='text-align:right'{ds(r.ret20)}>{pct(r.ret20, 1)}</td>"
+            f"<td style='text-align:right'{ds(r.ret60)} data-tip='{ret60_tip}'>{pct(r.ret60, 1)}</td>"
+            f"<td style='text-align:right'{ds(r.ret_ytd)} data-tip='{ytd_tip(r.code)}'>{pct(r.ret_ytd, 1)}</td>"
             f"<td style='text-align:right'{ds(r.amt_mult)} data-tip='{quant_tip(r)}'>{num(r.amt_mult, 2, '×')}</td>"
             f"<td style='text-align:right'{ds(r.dist_hi60)}>{pct(r.dist_hi60, 0, sign=False)}</td>"
             f"<td style='text-align:right'{ds(pe)}>{num(pe, 0, 'x')} <span style='color:#8b949e;font-size:12.6px'>{pe_lbl}</span></td>"
             f"<td style='text-align:right'{ds(r.mcap_yi)}>{num(r.mcap_yi, 0)}</td>"
             f"<td>{sparkline(r.spark, tip=sp_tip(r))}</td></tr>")
 
-    # ---- 层间强弱：口径（相对/绝对）× 范围（全部/20日/5日）预渲染
-    lay_day = D["lay_day"]
+    # ---- 层间强弱：口径（相对/绝对）× 范围（全部/今年以来/近60日/近20日/近5日）预渲染
+    # 净值走 kline 前复权日线（约一年）：mkt 归档只有几十天，撑不起「近60日 / 今年以来」
     lay_amt = D.get("lay_amt", pd.DataFrame())
     board_amt = D.get("board_amt", pd.DataFrame())
-    bench_daily = pd.Series(dtype=float)
     kl = D.get("kline") if isinstance(D.get("kline"), pd.DataFrame) else pd.DataFrame()
-    if not kl.empty and "000300" in set(kl.code):
-        b = kl[kl.code == "000300"].copy()
-        b["d"] = b.date.astype(str).str.replace("-", "", regex=False)
-        bser = b.set_index("d").close.reindex(days)
-        bench_daily = bser.pct_change() * 100
-    bnav = (1 + bench_daily.fillna(0) / 100).cumprod()
-    lay_nav = {l: (1 + lay_day[l].fillna(0) / 100).cumprod() for l in LAYERS if l in lay_day.columns}
+    a_panel_l = panel[panel.market == "A"]
+    a_layer = dict(zip(a_panel_l.code, a_panel_l.ai_layer))
+    lay_nav, bnav, xdays = {}, pd.Series(dtype=float), days
+    if not kl.empty and a_layer and "000300" in set(kl.code):
+        k = kl.copy()
+        k["d"] = k.date.astype(str).str.replace("-", "", regex=False)
+        k = k[k.d <= day]
+        xdays = sorted(set(k.loc[k.code == "000300", "d"]))
+        cpx = k[k.code.isin(a_layer)].pivot_table(index="d", columns="code", values="close").reindex(xdays)
+        k_pct = cpx.pct_change() * 100
+        k_pct.columns = [a_layer[c] for c in k_pct.columns]
+        lay_pct = k_pct.T.groupby(level=0).median().T        # 每层每日中位涨跌
+        lay_nav = {l: (1 + lay_pct[l].fillna(0) / 100).cumprod()
+                   for l in LAYERS if l in lay_pct.columns and lay_pct[l].notna().any()}
+        bench_pct = (k.loc[k.code == "000300"].set_index("d").close.reindex(xdays)
+                     .astype(float).pct_change() * 100)
+        bnav = (1 + bench_pct.fillna(0) / 100).cumprod()
+    else:                                                    # 没 kline 就退回归档口径
+        lay_day = D["lay_day"]
+        bench_daily = pd.Series(dtype=float)
+        if not kl.empty and "000300" in set(kl.code):
+            b = kl[kl.code == "000300"].copy()
+            b["d"] = b.date.astype(str).str.replace("-", "", regex=False)
+            bench_daily = b.set_index("d").close.reindex(days).pct_change() * 100
+        bnav = (1 + bench_daily.fillna(0) / 100).cumprod()
+        lay_nav = {l: (1 + lay_day[l].fillna(0) / 100).cumprod() for l in LAYERS if l in lay_day.columns}
 
     def _rebase(s):
         return ((s / s.iloc[0] - 1) * 100) if len(s) and s.iloc[0] else s * 0
 
-    SPAN_LBL = {"all": f"近 {len(days)} 个交易日", "20": "近 20 个交易日", "5": "近 5 个交易日"}
+    def _span_start(span):
+        if span == "all":
+            return 0
+        if span == "ytd":
+            i = next((i for i, d in enumerate(xdays) if d >= f"{day[:4]}0101"), len(xdays))
+            return max(i - 1, 0)                             # 前一根做基准，算的是今年以来的收益
+        return max(len(xdays) - int(span) - 1, 0)
+
+    def _span_lbl(span, s0):
+        n = len(xdays) - s0
+        return f"全部 {n} 个交易日" if span == "all" else f"今年以来 {n} 个交易日" if span == "ytd" \
+            else f"近 {span} 个交易日"
+
+    # 数据没长到能区分时（切片和「全部」同一段）不出按钮，免得点了没反应
+    spans = [(sv, sl, s0) for sv, sl in (("all", "全部"), ("ytd", "今年以来"), ("60", "近60日"),
+                                         ("20", "近20日"), ("5", "近5日"))
+             if (s0 := _span_start(sv)) > 0 or sv == "all"]
+    SPAN_LBL = {sv: _span_lbl(sv, s0) for sv, _, s0 in spans}
     lay_figs = []
-    for span in ("5", "20", "all"):
-        s0 = 0 if span == "all" else max(len(days) - (5 if span == "5" else 20) - 1, 0)
-        dslice, bsub = days[s0:], bnav.iloc[s0:]
+    for span, _sl, s0 in spans:
+        dslice, bsub = xdays[s0:], bnav.iloc[s0:]
         for base in ("rel", "abs"):
             ser = []
             for l, nav in lay_nav.items():
@@ -1668,7 +1752,7 @@ def main():
             lay_figs.append((f"{base}_{span}", f"<div class='chart'>{line_chart(dslice, ser, title, sub, H=300)}</div>"))
     lay_switch = figbox(
         [("base", [("rel", "相对沪深300", True), ("abs", "绝对涨跌", False)], "口径"),
-         ("span", [("all", "全部", True), ("20", "近20日", False), ("5", "近5日", False)], "范围")],
+         ("span", [(sv, sl, sv == "all") for sv, sl, _ in spans], "范围")],
         lay_figs)
     mkt_med_vals = list(D["m_med"].values)
 
@@ -1953,7 +2037,8 @@ def main():
 <h2 id="s6"><span class="n">6</span>全表<span class="meta">{len(panel)} 家 · 点表头排序</span></h2>
 {t54_bar}
 <div class="scroll"><table id="t54"><thead><tr><th>公司</th><th>层 / 细分</th><th>市场</th><th style="text-align:right">今日</th>
-<th style="text-align:right">5日</th><th style="text-align:right">10日</th><th style="text-align:right">20日</th><th style="text-align:right">量能</th>
+<th style="text-align:right">5日</th><th style="text-align:right">20日</th><th style="text-align:right">60日</th>
+<th style="text-align:right">今年以来</th><th style="text-align:right">量能</th>
 <th style="text-align:right">距60日高</th><th style="text-align:right">PE</th><th style="text-align:right">市值(亿)</th><th data-nosort>40日</th></tr></thead>
 <tbody>{table_rows}</tbody></table></div>
 <details class="fine"><summary>PE / 量能 / 距 60 日高 怎么算</summary><div class="body">
@@ -1961,6 +2046,9 @@ def main():
 <p>NTM = w×FY1 + (1−w)×FY2，w = 距本财年结束剩余天数 / 365；港股按各公司财年（阿里/联想是 3 月年结）算，港股 EPS 多为人民币，
 按当日 CNYHKD 折成港元再比价，所以同一家会出现 NTM 与 Yahoo forwardPE（只取 FY1）的小差。</p>
 <p>「量能」= 当日成交额 / 前 20 日均；「距60日高」= 收盘 / 60 日最高 − 1（0% 即新高）。</p>
+<p>「60日 / 今年以来」另换一套源：A 股用 <code>data/kline/daily.csv</code> 的前复权日线（约 260 根），
+港股用 <code>hk/kline.csv</code> 的除净后日收益连乘再补当日快照——盘后包只归档了 {len(days)} 个交易日，
+撑不起这两个窗口。今年上市的新股从上市首日算。</p>
 <p>港股历史来自 {D['hk_hist_src']}（约 400 根，新股只到上市日），当日快照补最后一根；港股共识 3 天刷新一次，Yahoo 限速时沿用上一份。</p>
 </div></details>
 
@@ -1976,7 +2064,10 @@ def main():
 </div></details>
 <details class="fine"><summary>口径与基准（6 条）</summary><div class="body">
 <p><b>① 名单：</b>GS 三张表去重 54 家（A 41 / HK 13），<b>不构成组合</b>，页面里没有权重和归因。</p>
-<p><b>② A 股行情：</b>涨跌与成交额来自通达信官网盘后包（当日收盘口径，与交易所一致）；港股当日快照来自腾讯，5/10/20 日、量能与 40 日走势来自 {D['hk_hist_src']}。</p>
+<p><b>② A 股行情：</b>涨跌与成交额来自通达信官网盘后包（当日收盘口径，与交易所一致）；港股当日快照来自腾讯，5/10/20 日、量能与 40 日走势来自 {D['hk_hist_src']}。
+层间强弱的净值曲线是另一套源：<code>data/kline/daily.csv</code> 的<b>前复权日线</b>（约一年），
+所以「今年以来 / 近60日」才有足够长的样本——盘后包只归档了 {len(days)} 个交易日，撑不起这两个窗口。
+两套源的差别只在除权除息日的一两个基点，斜率与排序不受影响。</p>
 <p><b>③ 港股 PE：</b>13 家前瞻 PE 来自 Yahoo 卖方共识（覆盖 1–32 家机构，小票只有 1–4 家，参考度弱于 A 股的 20+ 家）；
 分层 PE 打点图里港股是空心点（口径相同、只标记市场），PEG 散点图暂不含港股——Yahoo 那份共识没有 FY1/FY2 明细，算不出增速。</p>
 <p><b>④ 板块：</b>口径 = AI 相关东财概念板块（<code>data/em_cons.csv</code>，12,729 条成分关系）。板块中位分两种样本，
