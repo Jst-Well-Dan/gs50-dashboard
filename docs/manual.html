@@ -128,8 +128,9 @@ details.fine .body{padding:0 14px 12px;color:#a9b6c3;font-size:13px;line-height:
     <td>港股日线兜底（tushare 抽风时）</td><td class="half">兜底</td></tr>
 <tr><td class="mono">tl.kaixin8.top/tushare/sdk → daily_basic</td><td>tushare 代理</td><td class="mono">theme_data.db_quotes()</td>
     <td>总市值、流通市值、换手、量比、PE_TTM、PB（按 trade_date 取历史）</td><td class="ok">38 天全覆盖</td></tr>
-<tr><td class="mono">…/report_rc</td><td>tushare 代理</td><td class="mono">fetch_consensus.fetch_one()</td>
-    <td>逐家研报盈利预测 → FY1/FY2 中位 → <code>PE_NTM</code>（按 as-of 日，无前视）</td><td class="ok">38 天全覆盖</td></tr>
+<tr><td class="mono">…/report_rc</td><td>tushare 代理（日常）<br>官方端点（周刷）</td><td class="mono">fetch_consensus.fetch_one()</td>
+    <td>逐家研报盈利预测 → FY1/FY2 中位 → <code>PE_NTM</code>（按 as-of 日，无前视）。
+    日常命中 <code>.cache/consensus/</code> 即零网络；每周六 18:00 用官方 token 全量刷一遍</td><td class="ok">38 天全覆盖</td></tr>
 <tr><td class="mono">…/hk_daily</td><td>tushare 代理</td><td class="mono">fetch_hk.kline_tushare()</td>
     <td>港股未复权收盘 <code>raw</code>、成交额、除净口径涨跌 → <code>hk/kline.csv</code></td><td class="ok">每天用</td></tr>
 <tr><td class="mono">…/hk_fina_indicator</td><td>tushare 代理</td><td class="mono">—（试过，未接入）</td>
