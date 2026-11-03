@@ -125,7 +125,11 @@ def main():
         for i, (title, args) in enumerate(steps, 1):
             run(f"1/4 抓数 · {title}（{i}/{len(steps)}）", args)
         if "--no-consensus" not in flags:
-            run(f"2/4 A 股共识 {day}", [os.path.join("scripts", "fetch_consensus.py"), day])
+            rc = run(f"2/4 A 股共识 {day}", [os.path.join("scripts", "fetch_consensus.py"), day])
+            # 这一步失败很安静（exit 1 被当成「继续」），后果却是整页 PE_NTM 全空，所以要吼一声
+            if not os.path.exists(os.path.join(ROOT, "data", "consensus", f"{day}.csv")):
+                print(f"!! {day} 的 A 股共识没落盘（exit {rc}）→ 页面 PE_NTM 会大面积缺失；"
+                      f"查 tushare 依赖（six）/ TUSHARE_KEY", flush=True)
         else:
             print("\n=== 2/4 A 股共识（跳过，复用 consensus/ 里最近一版）===", flush=True)
     else:

@@ -64,7 +64,9 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         run: |
           python -m pip install --upgrade pip
-          pip install 'pandas==3.0.5' 'tushare==1.4.29' yfinance
+          # six：tushare 1.4.29 的 trader 模块 import six，但它的依赖里没写 → 云端 pip 装不上，
+          # import tushare 直接 ModuleNotFoundError，A 股共识这一步整条静默失败（PE_NTM 全空）
+          pip install 'pandas==3.0.5' 'tushare==1.4.29' yfinance six
 
       # 数据源连通性探针：tdx 盘后包 / 腾讯行情 / tushare 代理。失败不中断，只为留证据。
       - name: 数据源连通性
