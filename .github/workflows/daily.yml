@@ -2,11 +2,13 @@ name: daily
 
 # 云端每天跑一遍完整流水线（抓数 → 出页面 → 提交 docs/），Pages 源 = main /docs，push 即上线。
 # GitHub 的 cron 用 UTC：09:30 UTC = 17:30 北京时间。
-# 注：新建仓库后 cron 可能长期不注册（event=schedule 一次都不出现），改一次本文件 push 即可让 GitHub 重新登记定时器。
+# 注 1：新建仓库后 cron 可能长期不注册（event=schedule 一次都不出现），改一次本文件 push 即可让 GitHub 重新登记定时器。
+# 注 2：本仓库实测 schedule 事件会被延迟数小时（2026-11-02 那两次 09:30/11:30 UTC 的 cron 直到 19:42/20:50 UTC 才跑，
+#        北京 03:42/04:50）。所以别指望「定点两枪」，改成北京 17:00–21:40 每 20 分钟一次心跳；
+#        真正的抓数成本只落在「今天还没出页」的那一次，其余靠下面的 gate 步骤在装依赖之前就退出。
 on:
   schedule:
-    - cron: '30 9 * * 1-5'    # 17:30 北京时间
-    - cron: '30 11 * * 1-5'   # 19:30 北京时间：盘后包发得晚时的补跑（已出过就无 diff，不会重复提交）
+    - cron: '*/20 9-13 * * 1-5'   # 09:00–13:40 UTC = 北京 17:00–21:40，每 20 分钟
   workflow_dispatch:
     inputs:
       day:
@@ -31,22 +33,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 心跳跑起来的一大半都是白跑：页面已出过、或今天盘后包还没发（非交易日）。
+      # 在装依赖之前就判掉，一次跳过只花 ~15 秒。workflow_dispatch 一律真跑，方便手工重出。
+      - name: 今天还需不需要跑
+        id: gate
+        run: |
+          today=$(TZ=Asia/Shanghai date +%Y%m%d)
+          echo "今天（北京）= $today"
+          if [ -f "docs/data/$today.json" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "$today 的页面已存在 → 跳过（要重出请用 workflow_dispatch）"
+          else
+            code=$(curl -s -o /dev/null -m 25 -w '%{http_code}' "http://www.tdx.com.cn/products/data/data/g4day/$today.zip" || echo ERR)
+            echo "盘后包 $today.zip → $code"
+            if [ "$code" = "200" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "$today 的盘后包还没发布（非交易日 / 未出）→ 跳过"
+            fi
+          fi
+
       # 版本跟本机对齐：脚本里用了 f-string 内嵌反斜杠（3.12+ 才合法），pandas 也锁 3.0.x
       - uses: actions/setup-python@v5
+        if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         with:
           python-version: '3.13'
 
       - name: 安装依赖
+        if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install 'pandas==3.0.5' 'tushare==1.4.29' yfinance
 
       # 数据源连通性探针：tdx 盘后包 / 腾讯行情 / tushare 代理。失败不中断，只为留证据。
       - name: 数据源连通性
+        if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         continue-on-error: true
         run: |
           for u in \
-            "http://www.tdx.com.cn/products/data/data/g4day/20261029.zip" \
+            "http://www.tdx.com.cn/products/data/data/g4day/$(TZ=Asia/Shanghai date +%Y%m%d).zip" \
             "https://qt.gtimg.cn/q=sh600519" \
             "https://tl.kaixin8.top/tushare/sdk" ; do
             code=$(curl -s -o /dev/null -m 30 -w '%{http_code}' "$u" || echo "ERR")
@@ -55,6 +81,7 @@ jobs:
 
       # data/ 与 .cache/ 不入库（体积大），靠 cache 在多次运行之间接力，避免每次重新回补历史
       - name: 恢复数据缓存
+        if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -68,12 +95,14 @@ jobs:
           restore-keys: gs50-data-
 
       - name: 抓数 + 出页面
+        if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         env:
           TUSHARE_KEY: ${{ secrets.TUSHARE_KEY }}
         run: |
           python scripts/run_daily.py ${{ inputs.day }} ${{ inputs.extra_args }} --require-today
 
       - name: 提交 docs/（Pages 从 main /docs 自动发布）
+        if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
