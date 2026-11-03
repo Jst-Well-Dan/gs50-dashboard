@@ -1,0 +1,93 @@
+name: weekly-consensus
+
+# A 股卖方共识（report_rc）周刷：官方端点 + 56 位个人 token。
+#
+# 为什么单独一条：镜像（tl.kaixin8.top）在盘后高峰会 upstream_pool_exhausted，
+# 而官方端点对 report_rc 硬限 1 次/分钟 → 41 家 ≈ 41 分钟。日常跑吃这份长任务不划算，
+# 所以挪到周六（北京时间 18:00，非交易日、非高峰），一次把 .cache/consensus/ 刷干净。
+#
+# 日常的 daily.yml 不联网：fetch_one 命中 .cache/consensus/<code>.csv 就直接重算。
+# 这条任务把缓存窗口（190 天）往前推，顺带重出最近一期页面（PE_NTM 会跟着微调）。
+#
+# 需要 secret：TUSHARE_TOKEN（56 位个人账号 token，官方端点；不是 47 位 tsr_ 镜像 key）
+
+on:
+  schedule:
+    - cron: '0 10 * * 6'        # 周六 10:00 UTC = 18:00 CST
+  workflow_dispatch:
+    inputs:
+      day:
+        description: '数据日（留空 = 缓存里最近一个交易日）'
+        required: false
+        default: ''
+      extra_args:
+        description: '透传给 fetch_consensus.py 的额外参数'
+        required: false
+        default: '--force'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-consensus
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120          # 41 家 × 1 次/分钟 ≈ 41 分钟，留足余量
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          # six：tushare 1.4.29 的 trader 模块隐式 import，没写进它自己的依赖
+          pip install 'pandas==3.0.5' 'tushare==1.4.29' yfinance six
+
+      - name: 恢复数据缓存
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/mkt
+            data/quote
+            data/kline
+            data/consensus
+            data/hk
+            .cache
+          key: gs50-data-${{ github.run_id }}
+          restore-keys: gs50-data-
+
+      - name: 刷共识 + 重出最近一期
+        env:
+          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+        run: |
+          set -e
+          DAY="${{ inputs.day }}"
+          if [ -z "$DAY" ]; then
+            DAY=$(ls data/mkt 2>/dev/null | sed 's/\.csv$//' | sort | tail -1)
+          fi
+          if [ -z "$DAY" ]; then
+            echo "缓存里没有 data/mkt → 先跑一次 daily.yml"; exit 1
+          fi
+          echo "数据日 $DAY"
+          python -u scripts/fetch_consensus.py "$DAY" ${{ inputs.extra_args || '--force' }} --official
+          python -u scripts/build_gs50_dashboard.py "$DAY" \
+            --out "docs/$DAY.html" --summary "docs/data/$DAY.json"
+          python -u scripts/build_archive.py
+
+      - name: 提交 docs/（Pages 从 main /docs 自动发布）
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs
+          if git diff --cached --quiet; then
+            echo "共识没有变化，跳过提交"
+          else
+            git commit -m "consensus: 周刷 $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M') CST"
+            git push
+          fi

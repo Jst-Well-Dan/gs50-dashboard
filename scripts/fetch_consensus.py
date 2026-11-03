@@ -8,10 +8,11 @@
    而卖方共识是"未来 12 个月"的市场定价基础。两者都存，图上标清哪个是哪个。
 
    数据源：tushare report_rc（逐股，单次约 5–40 秒，代理会间歇 upstream_pool_exhausted → 长退避重试）
+  官方端点（--official）：不踩池化，但硬限 1 次/分钟 → 41 家 ≈ 41 分钟。周刷专用（见 weekly-consensus.yml）。
    缓存：.cache/consensus/<code>.csv（原样存，改窗口不用重抓）
    断点续跑：data/consensus/YYYYMMDD.csv 里已有的 code6 直接跳过
 
-   用法：python scripts/fetch_consensus.py [YYYYMMDD] [--window 190] [--force] [--offline]
+   用法：python scripts/fetch_consensus.py [YYYYMMDD] [--window 190] [--force] [--offline] [--official]
 
    ⚠️ 口径是「YYYYMMDD 那天的视角」：窗口起止与 180 天新鲜度都按这个日子算。
       补历史日就靠这个 —— 先把原始研报表拉宽窗口一次，再用 --offline 按日重算：
@@ -35,12 +36,14 @@ OUTDIR = "consensus"
 FRESH_DAYS = 180
 
 
-def fetch_one(pro, ts_code, start, end, force=False, seg_days=170):
+def fetch_one(pro, ts_code, start, end, force=False, seg_days=170, callf=None):
     """拉原始研报表（每机构每期的净利预测）→ .cache/consensus/<ts_code>.csv
 
     代理对单次区间有限制（超了报 date_range_too_large），所以按 seg_days 分段拉再合并，
     这样想补多久的历史就能补多久（补历史日靠它把缓存拉宽）。
+    callf = tc.call（镜像）或 tc.call_official（官方，1 次/分钟）。
     """
+    callf = callf or tc.call
     os.makedirs(CACHE, exist_ok=True)
     f = os.path.join(CACHE, f"{ts_code}.csv")
     if os.path.exists(f) and not force:
@@ -52,7 +55,7 @@ def fetch_one(pro, ts_code, start, end, force=False, seg_days=170):
         seg_end = min(cursor + dt.timedelta(days=seg_days - 1), e)
         for i in range(4):
             try:
-                frames.append(tc.call(pro.report_rc, tries=1, ts_code=ts_code,
+                frames.append(callf(pro.report_rc, tries=1, ts_code=ts_code,
                                       start_date=cursor.strftime("%Y%m%d"),
                                       end_date=seg_end.strftime("%Y%m%d"), fields=FIELDS))
                 break
@@ -106,6 +109,7 @@ def main():
         if a.startswith("--window"): win = int(a.split("=")[-1])
     force = "--force" in sys.argv
     offline = "--offline" in sys.argv          # 只用 .cache/ 里的原始研报表，不联网（补历史日专用）
+    official = "--official" in sys.argv        # 走官方端点（56 位 token），1 次/分钟，周刷专用
     today = dt.date.today()
     day = args[0] if args else today.strftime("%Y%m%d")
     # 口径必须是「那天的视角」：窗口与 180 天新鲜度都按 day 算，不用真正的 today（否则补历史会前视）
@@ -125,18 +129,24 @@ def main():
     elif force and os.path.exists(out):
         os.remove(out)                     # --force 是「整份重算」，不然后面 append 会把旧行叠进去
 
-    pro = None if offline else tc.pro()
+    pro = None if offline else (tc.pro_official() if official else tc.pro())
+    callf = tc.call_official if official else tc.call
     start = (today - dt.timedelta(days=win)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
     if force and not offline:
-        print(f"重拉原始研报表：{start} ~ {end}（覆盖 .cache/consensus/）")
+        print(f"重拉原始研报表：{start} ~ {end}（{'官方端点，1 次/分钟' if official else '镜像'}，覆盖 .cache/consensus/）")
     for i, code in enumerate(codes, 1):
         if code in done: continue
         ts_code = code + (".SH" if code[0] in "6" else ".BJ" if code[0] in "48" else ".SZ")
+        cache_f = os.path.join(CACHE, f"{ts_code}.csv")
         t0 = time.time()
-        rc = (fetch_one(pro, ts_code, start, end, force) if pro is not None
-              else pd.read_csv(os.path.join(CACHE, f"{ts_code}.csv"), dtype=str)
-              if os.path.exists(os.path.join(CACHE, f"{ts_code}.csv")) else pd.DataFrame())
+        rc = (fetch_one(pro, ts_code, start, end, force, callf=callf) if pro is not None
+              else pd.read_csv(cache_f, dtype=str)
+              if os.path.exists(cache_f) else pd.DataFrame())
+        # --force 刷新时某家拉失败，别把它从名单里抹掉：沿用上一版缓存（并标出来）
+        if pro is not None and (rc is None or not len(rc)) and os.path.exists(cache_f):
+            rc = pd.read_csv(cache_f, dtype=str)
+            print(f"    ↺ {ts_code} 本轮没拉到，沿用 .cache 旧版", flush=True)
         r = ntm_of(rc, today)
         if not r:
             print(f"[{i}/{len(codes)}] {ts_code} 无可用共识"); continue
