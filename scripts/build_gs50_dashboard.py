@@ -17,6 +17,7 @@
     1 温度计   2 广度与分化   3 结构轮动   4 名单 vs 板块   5 异动榜
     6 全表     7 估值（贵不贵 × 有没有人追）        8 口径与积累
 """
+import datetime as dt
 import glob
 import json
 import math
@@ -28,6 +29,13 @@ _CWD0 = os.getcwd()   # chdir 前记住调用处的工作目录，--out/--summar
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"))
 
 import pandas as pd
+
+# 时间一律用北京时间：runner 是 UTC，pd.Timestamp.now() 会比页面上写的 CST 差 8 小时。
+CST = dt.timezone(dt.timedelta(hours=8))
+
+
+def now_cst():
+    return dt.datetime.now(CST)
 
 # 仓库地址：页脚那个 GitHub 图标指这里。只有图标 + title，不占版面、不拉外部图片。
 REPO_URL = "https://github.com/Jst-Well-Dan/gs50-dashboard"
@@ -2102,7 +2110,7 @@ MSCI China 拿不到（腾讯行情不提供该指数），且它是全市场市
 动量窗口（5/10/{data_days - 1} 日）随积累自动变长。</p>
 <p>生成命令：<code>python scripts/build_gs50_dashboard.py {day}</code>　·　数据：<code>data/mkt/</code>、<code>data/quote/</code>、<code>data/kline/</code></p>
 </div></details>
-<footer>AI 主题每日复盘 · 生成于 {pd.Timestamp.now():%Y-%m-%d %H:%M} · 数据日 {day}　·　<a href="index.html">首页</a>　·　<a href="archive.html">历史归档</a>　·　{GH_ICON}</footer>
+<footer>AI 主题每日复盘 · 生成于 {now_cst():%Y-%m-%d %H:%M} · 数据日 {day}　·　<a href="index.html">首页</a>　·　<a href="archive.html">历史归档</a>　·　{GH_ICON}</footer>
 </main>
 </div>
 <div id="tip"></div>
@@ -2139,7 +2147,7 @@ MSCI China 拿不到（腾讯行情不提供该指数），且它是全市场市
             "hi": int(D["hi_n"]),
             "ntm_a": int(a_panel.pe_ntm.notna().sum()),
             "layers": {SHORT.get(l, l): _j(r.med) for l, r in layer.iterrows()},
-            "data_day": day, "built": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
+            "data_day": day, "built": now_cst().strftime("%Y-%m-%d %H:%M"),
         }
         with open(SUMMARY_PATH, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(payload, fh, ensure_ascii=False, indent=1, allow_nan=False)

@@ -27,6 +27,13 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+
+# 时间一律用北京时间：runner 是 UTC，datetime.now() 会比页面上写的 CST 差 8 小时。
+CST = __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
+
+
+def now_cst():
+    return __import__("datetime").datetime.now(CST)
 # ---------- 图表内排版 ----------
 # 图表 SVG 的坐标写在 1120 宽的虚拟画布上，落盘后再缩到容器宽度（桌面 ≈0.92×、手机 ≈0.93×）。
 # 所以写进 SVG 的字号要比「想看到的 CSS px」略大；这里两档就够，别再加第三档。
@@ -422,7 +429,7 @@ def build(docs_dir):
 「超额300 / 超额创50」= A 股中位 − 沪深300 / 创业板指；「超额 HSTECH」= 港股中位 − 恒生科技；
 「5日 / 20日」是名单 A 股的窗口中位涨跌；「异动」= 触发阈值的个股条数。点日期进入当天的完整页面。</p>
 
-<footer>AI 主题每日复盘 · 归档页生成于 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M}　·　
+<footer>AI 主题每日复盘 · 归档页生成于 {now_cst():%Y-%m-%d %H:%M}　·　
 {len(rows)} 期　·　重新生成：<code>python scripts/build_archive.py</code>　·　
 <a href="index.html">首页</a>　·　<a href="manual.html">项目说明</a>　·　{GH_ICON}</footer>
 </div>
@@ -693,7 +700,7 @@ def hub(rows, last):
 <ul class="recent">{recent}</ul>
 </section>
 
-<footer>AI 主题每日复盘 · 首页生成于 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M}　·　
+<footer>AI 主题每日复盘 · 首页生成于 {now_cst():%Y-%m-%d %H:%M}　·　
 数据日 {dlabel(day)}{f'（页面生成于 {built}）' if built else ''}　·　
 <a href="archive.html">历史归档</a>　·　{GH_ICON}</footer>
 </div>
