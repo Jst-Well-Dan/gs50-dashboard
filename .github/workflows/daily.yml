@@ -113,6 +113,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         env:
           TUSHARE_KEY: ${{ secrets.TUSHARE_KEY }}
+          # 镜像端点是共享池，会整段 SSL EOF / 池子耗尽；dbquotes 徒官方端点兵底（见 theme_data.db_quotes）
+          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
           # 手工触发可指定数据日；定时触发用 gate 挑出来的「最晚一个缺页的已发布日」
           DAY: ${{ inputs.day || steps.gate.outputs.day }}
         run: |
