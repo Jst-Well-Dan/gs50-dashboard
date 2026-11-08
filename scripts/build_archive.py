@@ -173,28 +173,103 @@ def dlabel(d):
 
 
 # ------------------------------------------------------------------ SVG
-def score_chart(rows, W=1120, H=210):
-    """温度分折线（0–100，带冰点/常温/过热参考线）"""
+VOL_K = 10                    # 波动率窗口（交易日）：太短会被单日 ±9% 带飞，太长就看不出转折
+VOL_CALM, VOL_HOT = 1.5, 3.0  # 经验档位分界（百分点）：平静 < 1.5 · 常态 < 3.0 · 剧烈 ≥ 3.0
+
+
+def vol_series(rows, k=VOL_K):
+    """中位日收益的 k 日滚动标准差（百分点，不年化）。
+
+    按行序（= 交易日）滚，不按日历日；median 缺失的行不进窗口（自动顺延），
+    样本不足 k 天就返回 None——所以前 k-1 期是空的，不插值。
+    """
+    out, win = [], []
+    for r in rows:
+        v = r.get("median")
+        if not ok(v):
+            out.append(None)
+            continue
+        win.append(float(v))
+        if len(win) < k:
+            out.append(None)
+            continue
+        w = win[-k:]
+        mu = sum(w) / k
+        out.append(math.sqrt(sum((x - mu) ** 2 for x in w) / k))
+    return out
+
+
+def vol_tier(v):
+    return "平静" if v < VOL_CALM else ("常态" if v < VOL_HOT else "剧烈")
+
+
+def vol_stats(rows, k=VOL_K):
+    """页面文案用：当前值 / 样本最高 / 中位 / 排位（1 = 最剧烈）+ 档位"""
+    s = [v for v in vol_series(rows, k) if v is not None]
+    if not s:
+        return {}
+    cur = s[-1]
+    return dict(k=k, cur=cur, mx=max(s), med=sorted(s)[len(s) // 2],
+                rank=1 + sum(1 for v in s if v > cur + 1e-9), n=len(s), tier=vol_tier(cur))
+
+
+def vol_note(rows, hub_mode=False):
+    """温度史下面那句话：口径 + 当前读数 + 排位 +（顶部矛盾时）一句判读"""
+    base = (f"下方副图 = <b>10 日波动率</b>：41 家 A 股<b>中位日涨跌</b>的 {VOL_K} 个交易日滚动标准差"
+            f"（百分点，不年化，需满 {VOL_K} 期才有值）。两条虚线 {VOL_CALM:g}% / {VOL_HOT:g}% 是经验档位："
+            f"低于前者算平静，高于后者算剧烈（淡红底）。")
+    st = vol_stats(rows)
+    if not st:
+        return base
+    txt = (f"{base}最新一期 <b>{st['cur']:.2f}%</b>（{st['tier']}），历史中位 {st['med']:.2f}%、"
+           f"最高 {st['mx']:.2f}%，排 <b>{st['rank']} / {st['n']}</b>（1 = 最剧烈）。")
+    if hub_mode and st["tier"] == "剧烈" and st["rank"] <= max(2, st["n"] // 4):
+        sc = rows[-1].get("score")
+        if ok(sc) and sc < 45:
+            txt += ("<br><b>温度低不等于平静：</b>分值在低位、波动却在样本最剧烈的一档——"
+                    "这是杀跌，不是无人问津。两个一起看才读得准。")
+    return txt
+
+
+def score_chart(rows, W=1120, H=210, H2=104):
+    """温度分折线（0–100）+ 下方 10 日波动率副图（共用 x 轴、各自一根 y 轴）。
+
+    为什么不画在同一片画布：温度是 0–100 的加权分、波动率是百分点，
+    两套量纲要么共用一根 y 轴，要么上双 y 轴——两者怎么缩放都能骗人。
+    上下两块各自标刻度、hover 联动，读数才站得住。
+    """
     n = len(rows)
     if n < 1:
         return ""
     pad_l, pad_r, pad_t, pad_b = 46, 16, 18, 30
-    iw, ih = W - pad_l - pad_r, H - pad_t - pad_b
+    iw = W - pad_l - pad_r
     step = iw / max(n - 1, 1)
+    vol = vol_series(rows)
+    vmx = max([v for v in vol if v is not None] or [0.0])
+    vmax = max(VOL_HOT + 0.5, math.ceil(vmx * 1.08 * 2) / 2)   # 顶端留 ~8% 余量，取到 0.5
+
+    t_top, t_bot = pad_t, H - pad_b
+    v_top = H + 2
+    v_bot = v_top + (H2 - 26)
+    total_h = v_bot + 26
 
     def X(i):
         return pad_l + (iw / 2 if n == 1 else i * step)
 
-    def Y(v):
-        return pad_t + ih * (1 - max(0.0, min(100.0, v)) / 100)
+    def Yt(v):
+        return t_top + (t_bot - t_top) * (1 - max(0.0, min(100.0, v)) / 100)
 
-    parts = [f"<svg viewBox='0 0 {W} {H}' role='img'>"]
+    def Yv(v):
+        return v_bot - (v_bot - v_top) * max(0.0, min(vmax, v)) / vmax
+
+    parts = [f"<svg viewBox='0 0 {W} {total_h}' role='img'>"]
+    # ---------------- 上：温度分
     for v, col in ((25, "#3fb950"), (62, "#d29922"), (80, "#f85149")):
-        parts.append(f"<line x1='{pad_l}' y1='{Y(v):.1f}' x2='{W - pad_r}' y2='{Y(v):.1f}' "
+        parts.append(f"<line x1='{pad_l}' y1='{Yt(v):.1f}' x2='{W - pad_r}' y2='{Yt(v):.1f}' "
                      f"stroke='{col}33' stroke-dasharray='3 4'/>"
-                     f"<text x='{pad_l - 8}' y='{Y(v) + 4:.1f}' fill='{DIM}' font-size='{FT_S}' "
+                     f"<text x='{pad_l - 8}' y='{Yt(v) + 4:.1f}' fill='{DIM}' font-size='{FT_S}' "
                      f"text-anchor='end' font-family='ui-monospace'>{v}</text>")
-    pts = " ".join(f"{X(i):.1f},{Y(r['score']):.1f}" for i, r in enumerate(rows) if ok(r.get("score")))
+    pts = " ".join(f"{X(i):.1f},{Yt(r['score']):.1f}" for i, r in enumerate(rows) if ok(r.get("score")))
     parts.append(f"<polyline points='{pts}' fill='none' stroke='{ACCENT}' stroke-width='1.8' "
                  f"stroke-linejoin='round'/>")
     for i, r in enumerate(rows):
@@ -202,14 +277,52 @@ def score_chart(rows, W=1120, H=210):
             continue
         tip = (f"{esc(dlabel(r['day']))}　温度 {r['score']:.0f} {esc(r.get('mood') or '')}"
                f"&#10;A 股中位 {r['median']:+.2f}%　{r.get('up')}/{r.get('down')} 涨跌")
+        if vol[i] is not None:
+            tip += f"&#10;10 日波动 {vol[i]:.2f}%（{vol_tier(vol[i])}）"
         parts.append(
-            f"<circle cx='{X(i):.1f}' cy='{Y(r['score']):.1f}' r='11' fill='transparent' data-tip='{tip}'/>"
+            f"<circle cx='{X(i):.1f}' cy='{Yt(r['score']):.1f}' r='11' fill='transparent' data-tip='{tip}'/>"
             f"<circle{' class=' + chr(39) + 'pk' + chr(39) if i == n - 1 else ''} "
-            f"cx='{X(i):.1f}' cy='{Y(r['score']):.1f}' r='4.4' fill='{ACCENT}' data-tip='{tip}'/>")
+            f"cx='{X(i):.1f}' cy='{Yt(r['score']):.1f}' r='4.4' fill='{ACCENT}' data-tip='{tip}'/>")
+
+    # ---------------- 下：10 日波动率副图（独立 y 轴）
+    parts.append(f"<text x='{pad_l}' y='{v_top - 14:.1f}' fill='{DIM}' font-size='{FT_S}' "
+                 f"font-family='ui-monospace'>10 日波动率 %</text>"
+                 f"<line x1='{pad_l}' y1='{v_top - 6}' x2='{W - pad_r}' y2='{v_top - 6}' "
+                 f"stroke='#232b36'/>")
+    if vmax > VOL_HOT + 0.2:      # 剧烈区淡红底（先画，压在最底下）
+        parts.append(f"<rect x='{pad_l}' y='{Yv(vmax):.1f}' width='{iw:.1f}' "
+                     f"height='{Yv(VOL_HOT) - Yv(vmax):.1f}' fill='#f8514910'/>")
+    for v, col in ((VOL_CALM, UP), (VOL_HOT, DOWN)):
+        parts.append(f"<line x1='{pad_l}' y1='{Yv(v):.1f}' x2='{W - pad_r}' y2='{Yv(v):.1f}' "
+                     f"stroke='{col}33' stroke-dasharray='3 4'/>"
+                     f"<text x='{pad_l - 8}' y='{Yv(v) + 4:.1f}' fill='{DIM}' font-size='{FT_S}' "
+                     f"text-anchor='end' font-family='ui-monospace'>{v:g}</text>")
+    vpts = [(i, v) for i, v in enumerate(vol) if v is not None]
+    if vpts:
+        line = " ".join(f"{X(i):.1f},{Yv(v):.1f}" for i, v in vpts)
+        parts.append(f"<polygon points='{X(vpts[0][0]):.1f},{v_bot} {line} {X(vpts[-1][0]):.1f},{v_bot}' "
+                     f"fill='{PURPLE}' fill-opacity='.16'/>"
+                     f"<polyline points='{line}' fill='none' stroke='{PURPLE}' stroke-width='1.6' "
+                     f"stroke-linejoin='round'/>")
+        for i, v in vpts:
+            t = (f"{esc(dlabel(rows[i]['day']))}　10 日波动 {v:.2f}%（{vol_tier(v)}）"
+                 f"&#10;窗口 {VOL_K} 个交易日　A 股中位 {rows[i]['median']:+.2f}%")
+            parts.append(
+                f"<circle cx='{X(i):.1f}' cy='{Yv(v):.1f}' r='11' fill='transparent' data-tip='{t}'/>"
+                f"<circle{' class=' + chr(39) + 'pk' + chr(39) if i == n - 1 else ''} "
+                f"cx='{X(i):.1f}' cy='{Yv(v):.1f}' r='3.4' fill='{PURPLE}' data-tip='{t}'/>")
+    parts.append(f"<text x='{pad_l - 8}' y='{v_bot + 4:.1f}' fill='{DIM}' font-size='{FT_S}' "
+                 f"text-anchor='end' font-family='ui-monospace'>0</text>"
+                 f"<text x='{pad_l - 8}' y='{Yv(vmax) + 4:.1f}' fill='{DIM}' font-size='{FT_S}' "
+                 f"text-anchor='end' font-family='ui-monospace'>{vmax:g}</text>")
+
     every = max(1, n // 8)
     for i, r in enumerate(rows):
+        # 倒数第二个档位标签会和末尾那个撞在一起（11/04 与 11/06 只隔 2 列），让位给末尾
+        if i != n - 1 and (n - 1 - i) <= max(2, every // 2):
+            continue
         if i % every == 0 or i == n - 1:
-            parts.append(f"<text x='{min(X(i), W - 26):.1f}' y='{H - 8}' fill='{DIM}' font-size='{FT_S}' "
+            parts.append(f"<text x='{min(X(i), W - 26):.1f}' y='{total_h - 8}' fill='{DIM}' font-size='{FT_S}' "
                          f"text-anchor='middle' font-family='ui-monospace'>{r['day'][4:6]}/{r['day'][6:]}'</text>")
     parts.append("</svg>")
     return "".join(parts)
@@ -382,7 +495,8 @@ def build(docs_dir):
 <div class="kicker">AI 主题每日复盘 · 历史归档　·　<a href="index.html">← 首页</a></div>
 <h1>{len(rows)} 期日报：温度、广度、超额，一天一行</h1>
 <p class="sub">每一行都是那一天生成的完整页面（<code>docs/YYYYMMDD.html</code>）——当时的结论、当时的图表，不会因为后面重跑而改变。
-下面三张图只抽出五个数：<b>温度分</b>（0–100 加权分）、<b>A 股中位涨跌</b>、<b>创业板指</b>、<b>港股中位</b>、<b>恒生科技</b>。</p>
+下面三张图只抽出六个序列：<b>温度分</b>（0–100 加权分）、<b>10 日波动率</b>（中位日涨跌的滚动标准差）、
+<b>A 股中位涨跌</b>、<b>创业板指</b>、<b>港股中位</b>、<b>恒生科技</b>。</p>
 </header>
 
 <div class="cards">
@@ -399,10 +513,11 @@ def build(docs_dir):
 <div class="x">恒生科技 {f"{last['bench_hst']:+.2f}%" if ok(last.get('bench_hst')) else '—'} → 超额 {pct(last.get('hk_excess'), 2)}</div></div>
 </div>
 
-<h2><span class="n">1</span>温度分（0–100）</h2>
+<h2><span class="n">1</span>温度分（0–100）与 10 日波动率</h2>
 <div class="chart">{score_chart(rows)}</div>
 <p class="note">温度 = A 股中位涨跌 + 广度 + 量能 + 创新高家数的加权，只用于横向比较和历史对比，不是预测。
 虚线是刻度：冰点 &lt;25 · 偏冷 &lt;45 · 常温 &lt;62 · 升温 &lt;80 · 过热 ≥80。</p>
+<p class="note">{vol_note(rows)}</p>
 
 <h2><span class="n">2</span>A 股：名单中位 vs 沪深300 / 创业板指</h2>
 <div class="chart">{bar_chart(rows, "median", [("bench300", DIM, "沪深300"), ("bench_c50", PURPLE, "创业板指")], "A 股")}</div>
@@ -691,8 +806,8 @@ def hub(rows, last):
 <section class="hsec">
 <h2>温度史</h2>
 <div class="chart">{chart}</div>
-<p class="note">线 = 温度分（0–100），三条虚线是刻度 25 / 62 / 80。
-点每一期，悬停可看当天的中位涨跌、涨跌家数和温度。越往右越新。</p>
+<p class="note">上 = 温度分（0–100），三条虚线是刻度 25 / 62 / 80；点每一期，悬停可看当天的中位涨跌、涨跌家数和温度。
+{vol_note(rows, hub_mode=True)}越往右越新。</p>
 </section>
 
 <section class="hsec">
