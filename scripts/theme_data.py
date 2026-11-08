@@ -253,6 +253,8 @@ def tencent_quotes(codes):
                          "amount_yi": round(f(37) / 1e4, 3), "turnover": f(38), "pe_ttm": f(39),
                          "amplitude": f(43), "float_mcap_yi": f(44), "mcap_yi": f(45), "pb": f(46),
                          "limit_up": f(47), "limit_down": f(48), "vol_ratio": f(49), "pe_static": f(52),
+                         # 快照自己的数据日期（30 号字段，形如 20261106150003）——历史上它是哪天的收盘靠它认
+                         "snap_day": ("".join(ch for ch in vals[30] if ch.isdigit()) or "")[:8],
                          "stale": f(37) == 0 and f(3) == f(4) and f(3) > 0}
         time.sleep(0.15)
     return pd.DataFrame(list(out.values()))
@@ -274,8 +276,13 @@ def db_quotes(day):
     g = pd.read_csv("gs50.csv", encoding="utf-8-sig", dtype=str).fillna("")
     codes = [c for c in g.a_code6 if c]
     pro = tc.pro()
-    db = tc.call(pro.daily_basic, tries=6, trade_date=day,
-                 fields="ts_code,trade_date,close,turnover_rate,volume_ratio,pe,pe_ttm,pb,total_mv,circ_mv")
+    fields = "ts_code,trade_date,close,turnover_rate,volume_ratio,pe,pe_ttm,pb,total_mv,circ_mv"
+    try:
+        db = tc.call(pro.daily_basic, tries=6, trade_date=day, fields=fields)
+    except Exception as exc:
+        # 镜像端点（tl.kaixin8.top）会整段 SSL EOF / 池子耗尽；官方端点一次就能拉全市场，切过去只多一分钟
+        print(f"! 镜像端点拿不到 {day} 的 daily_basic（{type(exc).__name__}: {exc}）→ 改走官方端点", flush=True)
+        db = tc.call_official(tc.pro_official().daily_basic, tries=3, trade_date=day, fields=fields)
     if db is None or not len(db):
         raise SystemExit(f"daily_basic 没有 {day} 的数据")
     db = db.copy()
@@ -405,6 +412,18 @@ def main():
         os.makedirs("quote", exist_ok=True)
         q.to_csv(f"quote/{day}.csv", index=False, encoding="utf-8-sig")
         print(f"行情：{len(q)} 条 → quote/{day}.csv")
+    if cmd == "snap":
+        # 按日期取快照：腾讯实时自带数据日期，对得上 day 就用它（含基准指数）；
+        # 对不上说明在给历史日补页，必须换 tushare daily_basic，否则市值/换手/PE 会错位一天。
+        q = tencent_quotes(a_codes + list(BENCH))
+        got = sorted({v for v in q.get("snap_day", []) if v})
+        if got == [day]:
+            os.makedirs("quote", exist_ok=True)
+            q.to_csv(f"quote/{day}.csv", index=False, encoding="utf-8-sig")
+            print(f"行情（腾讯实时，数据日 {day}）：{len(q)} 条 → quote/{day}.csv")
+        else:
+            print(f"腾讯快照的数据日是 {got or '未知'}，不是 {day} → 改走 tushare daily_basic 回补")
+            db_quotes(day)
     if cmd == "dbquotes":
         db_quotes(day)
     if cmd in ("kline", "all"):

@@ -128,10 +128,9 @@ def main():
         if "--no-hk" not in flags:
             steps.append(("港股 13 家", [td, "hk", day]))
             steps.append(("港股日线（归档用）", [os.path.join("scripts", "build_hk_kline.py"), day]))
-        # A 股快照只有两条路：腾讯实时（quotes，含基准指数）和 tushare 按日期（dbquotes，无基准）。
-        # 实时快照没有日期概念——补历史日时必须走 dbquotes，否则会把今天的收盘价写成那天的。
-        snap = [td, "quotes" if day == bj_today() else "dbquotes", day]
-        steps += [("A 股快照", snap),
+        # A 股快照：腾讯实时自带数据日期，snap 会自己判断——对得上 day 就直接落盘（含基准指数），
+        # 对不上（补历史日 / 云端延迟到次日）就改走 tushare daily_basic，不会把今天收盘写成那天的。
+        steps += [("A 股快照", [td, "snap", day]),
                   ("A 股日线", [td, "kline"])]
         for i, (title, args) in enumerate(steps, 1):
             run(f"1/4 抓数 · {title}（{i}/{len(steps)}）", args)
