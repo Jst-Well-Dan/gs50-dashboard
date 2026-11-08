@@ -25,6 +25,7 @@
     python scripts/run_daily.py --rebuild --all   # 不抓数，把全部日期页按当前模板重出一遍
 """
 
+import datetime as dt
 import glob
 import os
 import subprocess
@@ -36,6 +37,13 @@ DOCS = os.path.join(ROOT, "docs")
 PY = sys.executable
 BUILD = os.path.join("scripts", "build_gs50_dashboard.py")
 ARCHIVE = os.path.join("scripts", "build_archive.py")
+
+BJ = dt.timezone(dt.timedelta(hours=8))   # GitHub runner 是 UTC，日期一律按北京时间算
+
+
+def bj_today():
+    return dt.datetime.now(BJ).strftime("%Y%m%d")
+
 
 ALIAS_TPL = """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -93,7 +101,7 @@ def main():
     rebuild = "--rebuild" in flags
 
     if not rebuild:
-        day = day or __import__("datetime").date.today().strftime("%Y%m%d")
+        day = day or bj_today()
         td = os.path.join("scripts", "theme_data.py")
         steps = [("盘后包", [td, "pkg", day]),
                  ("回补历史", [td, "backfill", "30"])]
@@ -120,10 +128,16 @@ def main():
         if "--no-hk" not in flags:
             steps.append(("港股 13 家", [td, "hk", day]))
             steps.append(("港股日线（归档用）", [os.path.join("scripts", "build_hk_kline.py"), day]))
-        steps += [("A 股快照", [td, "quotes", day]),
+        # A 股快照只有两条路：腾讯实时（quotes，含基准指数）和 tushare 按日期（dbquotes，无基准）。
+        # 实时快照没有日期概念——补历史日时必须走 dbquotes，否则会把今天的收盘价写成那天的。
+        snap = [td, "quotes" if day == bj_today() else "dbquotes", day]
+        steps += [("A 股快照", snap),
                   ("A 股日线", [td, "kline"])]
         for i, (title, args) in enumerate(steps, 1):
             run(f"1/4 抓数 · {title}（{i}/{len(steps)}）", args)
+        if not os.path.exists(os.path.join(ROOT, "data", "quote", f"{day}.csv")):
+            print(f"!! {day} 的 A 股快照没落盘 → 页面会用最近一版 quote/*.csv（价格/换手/市值全部滞后）",
+                  flush=True)
         if "--no-consensus" not in flags:
             rc = run(f"2/4 A 股共识 {day}", [os.path.join("scripts", "fetch_consensus.py"), day])
             # 这一步失败很安静（exit 1 被当成「继续」），后果却是整页 PE_NTM 全空，所以要吼一声

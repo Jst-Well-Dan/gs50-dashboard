@@ -5,7 +5,10 @@ name: daily
 # 注 1：新建仓库后 cron 可能长期不注册（event=schedule 一次都不出现），改一次本文件 push 即可让 GitHub 重新登记定时器。
 # 注 2：本仓库实测 schedule 事件会被延迟数小时（2026-11-02 那两次 09:30/11:30 UTC 的 cron 直到 19:42/20:50 UTC 才跑，
 #        北京 03:42/04:50）。所以别指望「定点两枪」，改成北京 17:00–21:40 每 20 分钟一次心跳；
-#        真正的抓数成本只落在「今天还没出页」的那一次，其余靠下面的 gate 步骤在装依赖之前就退出。
+#        真正的抓数成本只落在「还有页面没出」的那一次，其余靠下面的 gate 步骤在装依赖之前就退出。
+# 注 3：延迟会跨过北京午夜，所以 gate 不能只问「今天」——11-05/11-06 的页面就是这么丢的（cron 凌晨才跑，
+#        today 已经变成第二天，去查一个还没发布的包 → 跳过）。现在改成往前看 5 个日历日，
+#        挑「盘后包已发布、但页面还没出」的最晚一天，显式传给 run_daily.py。
 on:
   schedule:
     - cron: '*/20 9-13 * * 1-5'   # 09:00–13:40 UTC = 北京 17:00–21:40，每 20 分钟
@@ -33,25 +36,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 心跳跑起来的一大半都是白跑：页面已出过、或今天盘后包还没发（非交易日）。
+      # 心跳跑起来的一大半都是白跑：页面已出过、或盘后包还没发（非交易日）。
       # 在装依赖之前就判掉，一次跳过只花 ~15 秒。workflow_dispatch 一律真跑，方便手工重出。
-      - name: 今天还需不需要跑
+      - name: 还有哪天要出页
         id: gate
         run: |
           today=$(TZ=Asia/Shanghai date +%Y%m%d)
           echo "今天（北京）= $today"
-          if [ -f "docs/data/$today.json" ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "$today 的页面已存在 → 跳过（要重出请用 workflow_dispatch）"
-          else
-            code=$(curl -s -o /dev/null -m 25 -w '%{http_code}' "http://www.tdx.com.cn/products/data/data/g4day/$today.zip" || echo ERR)
-            echo "盘后包 $today.zip → $code"
-            if [ "$code" = "200" ]; then
-              echo "run=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "run=false" >> "$GITHUB_OUTPUT"
-              echo "$today 的盘后包还没发布（非交易日 / 未出）→ 跳过"
+          day=""
+          for k in 0 1 2 3 4; do
+            d=$(TZ=Asia/Shanghai date -d "-$k day" +%Y%m%d)
+            if [ -f "docs/data/$d.json" ]; then
+              echo "$d：页面已存在"
+              continue
             fi
+            # 注意：不存在的日期返回 301 而不是 404，只有 200 才算「盘后包已发布」
+            code=$(curl -s -o /dev/null -m 25 -w '%{http_code}' "http://www.tdx.com.cn/products/data/data/g4day/$d.zip" || echo ERR)
+            echo "$d.zip → $code"
+            if [ "$code" = "200" ]; then
+              day=$d
+              break
+            fi
+          done
+          if [ -n "$day" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "day=$day" >> "$GITHUB_OUTPUT"
+            echo "→ 要出 $day 的页面"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "最近 5 天都没有待出的页面 → 跳过"
           fi
 
       # 版本跟本机对齐：脚本里用了 f-string 内嵌反斜杠（3.12+ 才合法），pandas 也锁 3.0.x
@@ -100,8 +113,11 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
         env:
           TUSHARE_KEY: ${{ secrets.TUSHARE_KEY }}
+          # 手工触发可指定数据日；定时触发用 gate 挑出来的「最晚一个缺页的已发布日」
+          DAY: ${{ inputs.day || steps.gate.outputs.day }}
         run: |
-          python scripts/run_daily.py ${{ inputs.day }} ${{ inputs.extra_args }} --require-today
+          echo "数据日 = ${DAY:-（空，按今天算）}"
+          python scripts/run_daily.py "$DAY" ${{ inputs.extra_args }} --require-today
 
       - name: 提交 docs/（Pages 从 main /docs 自动发布）
         if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.run == 'true'
