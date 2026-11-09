@@ -11,7 +11,7 @@ Group=deploy
 WorkingDirectory=/opt/gs50-dashboard
 Environment=HOME=/home/deploy
 Environment=TZ=Asia/Shanghai
-ExecStart=/opt/gs50-dashboard/deploy/run_daily.sh
+ExecStart=/bin/bash /opt/gs50-dashboard/deploy/run_daily.sh
 # 整轮 ~20 分钟，留足余量；超时强杀，下一轮心跳会补
 TimeoutStartSec=5400
 # 和 3 个 Node 服务、2 个容器共处一台 2 vCPU / 3.9G 的机器，别让它抢满

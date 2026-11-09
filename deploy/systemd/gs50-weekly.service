@@ -10,7 +10,7 @@ Group=deploy
 WorkingDirectory=/opt/gs50-dashboard
 Environment=HOME=/home/deploy
 Environment=TZ=Asia/Shanghai
-ExecStart=/opt/gs50-dashboard/deploy/run_weekly.sh
+ExecStart=/bin/bash /opt/gs50-dashboard/deploy/run_weekly.sh
 # 41 家 × 1 次/分钟 ≈ 41 分钟，官方端点会重试，留足 2 小时
 TimeoutStartSec=7200
 Nice=10
