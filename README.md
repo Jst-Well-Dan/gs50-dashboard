@@ -138,6 +138,8 @@ sudo systemctl enable --now gs50-daily.timer gs50-weekly.timer
 运维：`journalctl -u gs50-daily -f`（`gs50-weekly` 同）、`systemctl list-timers 'gs50-*'`、
 手动补一天 `sudo systemctl start gs50-daily` 或直接 `/opt/gs50-dashboard/deploy/run_daily.sh 20261030`。
 
+**需要动手时的命令清单（含验证、排错、应急）：[`deploy/README.md`](deploy/README.md)**
+
 为什么搬走（2026-11-09）：GitHub 的 `schedule` 在这个仓库长期不可靠——11-02 的两次 cron 延到北京
 凌晨 03:42/04:50 才跑；改成 17:00–21:40 每 20 分钟心跳后实测每天只落地 0–1 次（都拖到北京次日
 00:40–01:15），11-09 直接 0 次，当天页面缺失。GitHub 侧现在只保留 `workflow_dispatch` 当应急。
