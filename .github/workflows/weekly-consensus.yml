@@ -12,8 +12,9 @@ name: weekly-consensus
 # 需要 secret：TUSHARE_TOKEN（56 位个人账号 token，官方端点；不是 47 位 tsr_ 镜像 key）
 
 on:
-  schedule:
-    - cron: '0 10 * * 6'        # 周六 10:00 UTC = 18:00 CST
+  # 调度已搬到服务器（2026-11-09）：gs50-weekly.timer + /opt/gs50-dashboard/deploy/run_weekly.sh，
+  # 周六 18:00 CST，跑的是同一条命令（fetch_consensus --force --official → 重出最近一期 → push docs/）。
+  # 这里只留手动触发当应急；跑之前确认服务器 .env 里有 56 位 Tushare_token。
   workflow_dispatch:
     inputs:
       day:
