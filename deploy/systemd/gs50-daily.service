@@ -1,0 +1,26 @@
+[Unit]
+Description=GS50 每日复盘（抓数 → 出页面 → push 到 main，Pages 自动发布）
+Documentation=https://github.com/Jst-Well-Dan/gs50-dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+WorkingDirectory=/opt/gs50-dashboard
+Environment=HOME=/home/deploy
+Environment=TZ=Asia/Shanghai
+ExecStart=/opt/gs50-dashboard/deploy/run_daily.sh
+# 整轮 ~20 分钟，留足余量；超时强杀，下一轮心跳会补
+TimeoutStartSec=5400
+# 和 3 个 Node 服务、2 个容器共处一台 2 vCPU / 3.9G 的机器，别让它抢满
+Nice=10
+CPUQuota=150%
+MemoryMax=2500M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gs50-daily
+
+[Install]
+WantedBy=multi-user.target

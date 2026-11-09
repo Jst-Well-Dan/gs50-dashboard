@@ -1,0 +1,13 @@
+[Unit]
+Description=GS50 每日复盘 · 北京 17:00–21:40 每 20 分钟心跳
+
+[Timer]
+# GitHub 的 schedule 每天只肯跑 0–1 次、还晚 8 小时，所以调度搬到这里（服务器 TZ 已是 Asia/Shanghai）。
+# 17..21:00/20 = 17:00 起每 20 分钟到 21:40，共 15 次；gate 步骤决定哪一次真干活。
+OnCalendar=Mon-Fri 17..21:00/20:00
+Persistent=true
+AccuracySec=1min
+Unit=gs50-daily.service
+
+[Install]
+WantedBy=timers.target

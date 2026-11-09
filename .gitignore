@@ -1,6 +1,9 @@
 # 密钥：tushare token，绝对不能进仓库
 .env
 
+# 服务器上的 python 环境（deploy/ 里的脚本要用它）
+.venv/
+
 # 中间缓存
 .cache/
 __pycache__/

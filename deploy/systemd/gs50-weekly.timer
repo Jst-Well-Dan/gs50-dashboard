@@ -1,0 +1,12 @@
+[Unit]
+Description=GS50 A 股共识周刷 · 周六 18:00 CST
+
+[Timer]
+# 原 weekly-consensus.yml 是 sat 10:00 UTC = 18:00 CST；服务器 TZ 已是 Asia/Shanghai。
+OnCalendar=Sat 18:00:00
+Persistent=true
+AccuracySec=1min
+Unit=gs50-weekly.service
+
+[Install]
+WantedBy=timers.target

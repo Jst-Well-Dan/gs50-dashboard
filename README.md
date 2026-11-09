@@ -113,10 +113,39 @@ Pages 的源目录就是 `docs/`，不用改任何构建配置：
 2. 每天跑完 `python scripts/run_daily.py`，再双击 `deploy.bat`（commit + push）→ Pages 自动重建
 3. 或者根本不用管本机：见下面「云端每天自动跑」
 
-### 云端每天自动跑（GitHub Actions）
+### 云端每天自动跑（自有服务器 systemd timer，2026-11-09 起）
 
-`.github/workflows/daily.yml`：每个交易日 **17:30 北京时间**跑一遍完整流水线（19:30 再补跑一次，
-盘后包发得晚也不会漏），出完页面直接把 `docs/` 提交回 `main`，Pages 随之自动发布。
+调度在服务器 `117.72.111.211` 上（`deploy` 用户），不再依赖 GitHub 的 cron：
+
+| 单元 | 时间 | 干什么 |
+|---|---|---|
+| `gs50-daily.timer` | Mon-Fri 17:00–21:40 每 20 分钟 | `deploy/run_daily.sh`：gate（往前看 5 天，挑「盘后包已发布但页面还没出」的最晚一天）→ `run_daily.py` → commit + push `docs/` |
+| `gs50-weekly.timer` | Sat 18:00 | `deploy/run_weekly.sh`：A 股共识周刷（官方端点，41 家 ≈ 41 分钟）→ 重出最近一期 → push |
+
+安装（一次性）：仓库里 `deploy/` 与 `deploy/systemd/` 就是线上那份脚本和单元文件。
+
+```bash
+# 代码 + 依赖（venv 在 /opt/gs50-dashboard/.venv，.gitignore 已排除）
+cd /opt/gs50-dashboard && python3 -m venv .venv
+.venv/bin/pip install -i https://mirrors.aliyun.com/pypi/simple \
+  'pandas==3.0.5' 'tushare==1.4.29' yfinance six
+# .env（600）：Tushare_key=<47 位镜像> / Tushare_token=<56 位官方>
+# deploy key：ssh-keygen -t ed25519 -N "" -f ~/.ssh/gs50_deploy，公钥加到仓库 Settings → Deploy keys（勾 write）
+sudo cp deploy/systemd/* /etc/systemd/system/ && sudo systemctl daemon-reload
+sudo systemctl enable --now gs50-daily.timer gs50-weekly.timer
+```
+
+运维：`journalctl -u gs50-daily -f`（`gs50-weekly` 同）、`systemctl list-timers 'gs50-*'`、
+手动补一天 `sudo systemctl start gs50-daily` 或直接 `/opt/gs50-dashboard/deploy/run_daily.sh 20261030`。
+
+为什么搬走（2026-11-09）：GitHub 的 `schedule` 在这个仓库长期不可靠——11-02 的两次 cron 延到北京
+凌晨 03:42/04:50 才跑；改成 17:00–21:40 每 20 分钟心跳后实测每天只落地 0–1 次（都拖到北京次日
+00:40–01:15），11-09 直接 0 次，当天页面缺失。GitHub 侧现在只保留 `workflow_dispatch` 当应急。
+
+### 旧路径：GitHub Actions（已停用定时，仅手动）
+
+`.github/workflows/daily.yml` 仍可手动触发（`gh workflow run daily -f day=YYYYMMDD`），
+逻辑与服务器脚本一致；`TUSHARE_KEY` / `TUSHARE_TOKEN` 两个 secret 仍需保留以备应急。
 
 - 需要 `TUSHARE_KEY` secret：`gh secret set TUSHARE_KEY`（值就是 `.env` 里的 tushare_key）
 - 手动触发：`gh workflow run daily`，或 Actions 页面点 *Run workflow*（可指定 `day=YYYYMMDD`）
