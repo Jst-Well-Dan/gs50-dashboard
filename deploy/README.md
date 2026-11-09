@@ -37,32 +37,36 @@ icacls "$KEY" /inheritance:r /remove:g Everyone "BUILTIN\Users" "BUILTIN\Adminis
 
 ---
 
-## 1. ⚠️ 必做：配置 56 位官方 TUSHARE_TOKEN（11-14 周六 18:00 之前）
+## 1. ✅ 已配置：56 位官方 TUSHARE_TOKEN（2026-11-09 完成）
 
-不配的后果：镜像端点（tl.kaixin8.top）在盘后高峰挂掉时，A 股快照会整步失败；周六的共识周刷会直接报
-`找不到官方 token` 退出（不会破坏已有页面，只是刷不了）。
+服务器 `.env` 现在两个键都在（`Tushare_key` 47 位镜像 + `Tushare_token` 56 位官方），600 权限。
+已验证 `trade_cal` 和 `report_rc`（周刷真正用的那个接口）都能返回数据。
 
-**token 从哪来**：<https://tushare.pro> → 登录 → 个人主页 → 「接口 TOKEN」，56 位纯字母数字。
+**以后换 token 只需要重跑这一对命令** —— 本机改 `.env`，然后整份覆盖上去（别在服务器上手改，会被下次覆盖）：
 
-**写入服务器**（token 不落本地磁盘、不进 shell history）：
+```bash
+# 本机：确认两个键的长度（47 / 56），不打印值
+cd "E:/Python_Doc/Investment/20261029 gs50_dashboard"
+python -c "[print(k,len(v.strip())) for k,v in (l.split('=',1) for l in open('.env',encoding='utf-8').read().replace(chr(13),'').split(chr(10)) if '=' in l)]"
+
+# 上传并收紧权限（scp 会把本地的 644 带上去，必须再 chmod）
+scp -i "$KEY" .env "$SRV":/opt/gs50-dashboard/.env
+ssh -i "$KEY" "$SRV" 'chmod 600 /opt/gs50-dashboard/.env'
+```
+
+不用担手上传会把密钥带进仓库：`.env` 在 `.gitignore` 第 2 行（`git check-ignore -v .env` 可确认）。
+本机 `.env` 是 CRLF 换行也没关系，`scripts/tushare_client.py` 读的时候会 `replace("\\r", "")`。
+
+<details>
+<summary>等价的手工写入方式（不经过本机文件）</summary>
 
 ```bash
 ssh -i "$KEY" "$SRV"
-# —— 登录后执行 ——
 read -rs -p '粘贴 56 位 token（不回显）: ' TS; echo
 printf 'Tushare_token=%s\n' "$TS" >> /opt/gs50-dashboard/.env
-chmod 600 /opt/gs50-dashboard/.env
-unset TS
-tail -c 24 /opt/gs50-dashboard/.env | sed 's/./*/g'; echo    # 只确认行尾存在，不打印内容
-exit
+chmod 600 /opt/gs50-dashboard/.env; unset TS
 ```
-
-同一台机器上顺带确认镜像 key 还在（应该打出两个键名）：
-
-```bash
-ssh -i "$KEY" "$SRV" 'cut -d= -f1 /opt/gs50-dashboard/.env'
-# 期望两行： Tushare_key / Tushare_token
-```
+</details>
 
 ---
 
@@ -76,9 +80,22 @@ print(tc.pro_official().trade_cal(exchange=\"SSE\", start_date=\"20261101\", end
 "'
 ```
 
-- 打出 `cal_date / is_open / pretrade_date` 三行表 → **通了**
-- `RuntimeError 找不到官方 token` → 第 1 步没写进去（检查 `Tushare_token=` 拼写，脚本认 `tushare_token` 开头）
-- `抱歉，您没有访问该接口的权限` → token 位数不对，或复制到了镜像的 47 位 key
+- 打出 `cal_date / is_open / pretrade_date` 三行表 → **通了**（已验过：20261110/20261109 是交易日，20261107/08 休市）
+- `RuntimeError 找不到官方 token` → `.env` 里没有 `Tushare_token=` 这一行（脚本认 `tushare_token` 开头，大小写不敏感）
+- `抱歉，您没有访问该接口的权限` → 位数不对，或错把 47 位镜像 key 填进了 `Tushare_token`
+
+周刷真正依赖的是 `report_rc`（权限门槛比 `trade_cal` 高），单独验它：
+
+```bash
+ssh -i "$KEY" "$SRV" '/opt/gs50-dashboard/.venv/bin/python -c "
+import sys; sys.path.insert(0, \"/opt/gs50-dashboard/scripts\")
+import tushare_client as tc
+df = tc.pro_official().report_rc(ts_code=\"688256.SH\", start_date=\"20260401\", end_date=\"20261109\",
+                                 fields=\"ts_code,report_date,quarter,op_rt,op_pr,eps,np,pe\")
+print(len(df)); print(df.head(2))
+"'
+# 已验：rows=116
+```
 
 ---
 
