@@ -766,8 +766,8 @@ def line_chart(days, series, title, sub, W=1120, H=300, fmt="{:.1f}%", zero=True
     return "".join(p)
 
 
-def heatgrid(rows, cols, values, title, sub, W=1120, rowh=42):
-    """行 × 列 热力矩阵。values[r][c]"""
+def heatgrid(rows, cols, values, title, sub, W=1120, rowh=42, sep=None):
+    """行 × 列 热力矩阵。values[r][c]；sep = 在第 sep 列之后画一条分隔线"""
     L, T = 106, 72
     cw = (W - L - 20) / len(cols)
     H = T + rowh * len(rows) + 26
@@ -779,13 +779,16 @@ def heatgrid(rows, cols, values, title, sub, W=1120, rowh=42):
     for i, r in enumerate(rows):
         y = T + i * rowh
         p.append(f"<text x='{L-10}' y='{y+rowh/2+4:.1f}' fill='#c9d5e1' font-size='{FT_S}' text-anchor='end'>{esc(r)}</text>")
-        for j in range(len(cols)):
+        for j, c in enumerate(cols):
             v = values[i][j]
             bg, fg = heat_color(v)
             tip = "" if v is None or (isinstance(v, float) and math.isnan(v)) else f" data-tip='{esc(r)} · {esc(c)} · {v:+.2f}%'"
             p.append(f"<rect x='{L+cw*j+2:.1f}' y='{y+3:.1f}' width='{cw-4:.1f}' height='{rowh-6:.1f}' rx='4' fill='{bg}'{tip}/>")
             txt = "—" if v is None or (isinstance(v, float) and math.isnan(v)) else f"{v:+.1f}%"
             p.append(f"<text x='{L+cw*(j+0.5):.1f}' y='{y+rowh/2+4:.1f}' fill='{fg}' font-size='{FT_S}' text-anchor='middle'>{txt}</text>")
+    if sep is not None:
+        x = L + cw * sep
+        p.append(f"<line x1='{x:.1f}' y1='{T-24}' x2='{x:.1f}' y2='{H-20}' stroke='#30363d' stroke-width='1'/>")
     p.append("</svg>")
     return "".join(p)
 
@@ -1778,19 +1781,23 @@ def main():
         lay_figs)
     mkt_med_vals = list(D["m_med"].values)
 
-    # 层 × 时间热力
+    # 层 × 时间热力：今日 → 前1日 → 前2日（逐日）｜5/10/20 日累计
     hrows = [SHORT[l] for l in LAYERS if l in D["lay_day"].columns]
     hvals = []
     for l in LAYERS:
         if l not in D["lay_day"].columns:
             continue
         r = layer.loc[l] if l in layer.index else None
-        row = [r.med if r is not None else float("nan"), r.r5 if r is not None else float("nan"),
-               r.r10 if r is not None else float("nan"), r.r20 if r is not None else float("nan")]
-        # 按日
-        row += [D["lay_day"][l].iloc[-k] if len(D["lay_day"]) >= k else float("nan") for k in range(1, 4)]
+        col = D["lay_day"][l]
+        nan = float("nan")
+        # 逐日：前1日 / 前2日（今日用层表 med，和后面几列同一个口径）
+        day_vals = [float(col.get(days[-k])) if len(days) >= k and not pd.isna(col.get(days[-k])) else nan
+                    for k in (2, 3)]
+        row = [r.med if r is not None else nan] + day_vals + [
+            r.r5 if r is not None else nan, r.r10 if r is not None else nan,
+            r.r20 if r is not None else nan]
         hvals.append(row)
-    hcols = ["今日", "5日累计", "10日累计", "20日累计", "前1日", "前2日"]
+    hcols = ["今日", "前1日", "前2日", "5日累计", "10日累计", "20日累计"]
 
     # 象限：今日 / 5 日 / 20 日 三个窗口预渲染（横轴窗口均额，纵轴同窗口累计中位）
     def amt_win(amt_hist, span):
@@ -2024,12 +2031,16 @@ def main():
 
 <div class="scroll"><table><thead><tr><th>层</th><th style="text-align:right">家数</th>
 <th style="text-align:right">今日中位</th><th style="text-align:right">5日</th><th style="text-align:right">10日</th><th style="text-align:right">20日</th>
-<th style="text-align:right">层内P90−P10</th><th style="text-align:right">成交额</th><th style="text-align:right">量能</th>
+<th style="text-align:right" data-tip="层内分化：该层当天涨跌的第 90 百分位 − 第 10 百分位（pt）。越大 = 这一层里个股各走各的；越小 = 齐涨齐跌">层内分化 P90−P10</th><th style="text-align:right">成交额</th><th style="text-align:right">量能</th>
 <th style="text-align:right">PE_NTM中位</th><th style="text-align:right">成交额占比</th></tr></thead>
 <tbody>{layer_rows}</tbody></table></div>
+<p class="note">「层内分化 P90−P10」= 这一层当天涨跌的第 90 百分位减去第 10 百分位（单位 pt）：
+数字大 = 层里最强的一头和最弱的一头差距大（有人在冲、有人在砸），数字小 = 齐涨齐跌。
+这是「层<b>内部</b>离散度」，不是涨幅；家数少的层（尤其 2–4 家）分位数直接贴近最大/最小值，噪声大，
+只跟同层前后几天的数字比，不要跟别层比绝对高低。</p>
 
 <h2 id="s3"><span class="n">3</span>轮动结构</h2>
-<div class="chart">{heatgrid(hrows, hcols, hvals, "层 × 时间（中位涨跌）", "左三列累计，右三列逐日：看谁在由弱转强", W=1120)}</div>
+<div class="chart">{heatgrid(hrows, hcols, hvals, "层 × 时间（中位涨跌）", "左三列逐日（今日 → 前2日），右三列累计：看谁在由弱转强", W=1120, sep=3)}</div>
 {q_switch}
 <p class="note">{probe_line}</p>
 <h2 id="s4"><span class="n">4</span>异动榜</h2>
