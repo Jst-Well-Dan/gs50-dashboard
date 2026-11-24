@@ -36,56 +36,56 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 
 BRAND = "AI 主题每日复盘"
-PAGE_BG = (14, 17, 22)  # --bg
+PAGE_BG = (247, 245, 240)  # --paper（与网页同一档浅色纸面）
 MONO = "ui-monospace,Menlo,Consolas,monospace"
 
 FONT_SCALE = 1.12  # 图内字号放大倍数（网页按 1120px 宽设计，手机上要更大才好读）
 
 INJECT_CSS = """
 .bar,.shell{visibility:hidden}          /* 只截独立画布 */
-#__stage{position:absolute;left:0;top:0;background:#0e1116;z-index:2147483647}
+#__stage{position:absolute;left:0;top:0;background:var(--paper);z-index:2147483647}
 #__stage .chart{margin:0}
 #__stage .comp h2{margin:0 0 12px}
 #__stage .comp .cards{margin:12px 0 0}
 /* ---------- 4:5 竖版卡片（贴满画幅：窄边距 + 大字号 + 间距均分） ---------- */
 #__stage.s-card{display:flex;flex-direction:column;padding:40px 34px 26px;
-  color:#e6edf3;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   -webkit-font-smoothing:antialiased;overflow:hidden}
 .s-card .s-top{display:flex;justify-content:space-between;align-items:center;
-  padding-bottom:14px;border-bottom:1px solid #232b36;
-  font:500 14px/1 @MONO@;letter-spacing:.1em;color:#8b949e;white-space:nowrap}
-.s-card .s-top .s-brand{display:flex;align-items:center;gap:9px;color:#c9d5e1}
+  padding-bottom:14px;border-bottom:1px solid var(--line);
+  font:500 14px/1 @MONO@;letter-spacing:.1em;color:var(--muted);white-space:nowrap}
+.s-card .s-top .s-brand{display:flex;align-items:center;gap:9px;color:var(--ink-2)}
 .s-card .s-top .s-brand::before{content:'';width:8px;height:8px;border-radius:99px;
-  background:#58a6ff;box-shadow:0 0 0 3px #58a6ff26}
-.s-card .s-meta{color:#6e7681;letter-spacing:.04em;font-size:13.2px}
+  background:var(--actual);box-shadow:0 0 0 3px color-mix(in oklch, var(--actual) 20%, transparent)}
+.s-card .s-meta{color:var(--dim);letter-spacing:.04em;font-size:13.2px}
 .s-card .s-head{margin-top:26px}
-.s-card .s-sect{font:600 13.6px/1 @MONO@;letter-spacing:.18em;color:#58a6ff}
+.s-card .s-sect{font:600 13.6px/1 @MONO@;letter-spacing:.18em;color:var(--actual)}
 .s-card .s-title{margin:14px 0 0;font-size:64px;line-height:1.14;font-weight:680;
-  letter-spacing:-.03em;color:#eef4fa;text-wrap:balance}
-.s-card .s-sub{margin:14px 0 0;font-size:18px;line-height:1.55;color:#8b949e}
+  letter-spacing:-.03em;color:var(--ink);text-wrap:balance}
+.s-card .s-sub{margin:14px 0 0;font-size:18px;line-height:1.55;color:var(--muted)}
 /* 中段=标题+图，整块垂直居中；剩余空间在图上均分，不留一整块黑洞 */
 .s-card .s-main{flex:1;display:flex;flex-direction:column;justify-content:center;
   min-height:0;padding:4px 0 0}
 .s-card .s-body{display:flex;flex-direction:column;justify-content:flex-start;gap:26px;
-  margin:26px 0 0;padding:22px 0;border-top:1px solid #232b36;
-  border-bottom:1px solid #232b36;flex:1}
+  margin:26px 0 0;padding:22px 0;border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);flex:1}
 .s-card.s-frame .s-body{justify-content:space-between}
 .s-card.s-frame .s-main{flex:1;justify-content:center}
 .s-card .s-body .chart{background:none;border:0;border-radius:0;padding:0;
   margin:0;overflow:visible}
 .s-card .s-fig{flex:0 0 auto}
-.s-card .s-kpi{padding-top:24px;border-top:1px solid #232b36}
-.s-card .s-kpi .kick{font:600 12px/1 @MONO@;letter-spacing:.22em;color:#6e7681;
+.s-card .s-kpi{padding-top:24px;border-top:1px solid var(--line)}
+.s-card .s-kpi .kick{font:600 12px/1 @MONO@;letter-spacing:.22em;color:var(--dim);
   margin-bottom:18px}
 .s-card .s-kpi .row{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-.s-card .s-kpi .v{font:600 58px/1.04 @MONO@;letter-spacing:-.02em;color:#e6edf3;
+.s-card .s-kpi .v{font:600 58px/1.04 @MONO@;letter-spacing:-.02em;color:var(--ink);
   font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:5px}
-.s-card .s-kpi .v i{font-style:normal;font-size:17px;color:#8b949e;font-weight:500}
-.s-card .s-kpi .k{margin-top:12px;font-size:15px;color:#8b949e}
-.s-card .s-kpi .n{margin-top:3px;font:500 13px/1.4 @MONO@;color:#6e7681}
+.s-card .s-kpi .v i{font-style:normal;font-size:17px;color:var(--muted);font-weight:500}
+.s-card .s-kpi .k{margin-top:12px;font-size:15px;color:var(--muted)}
+.s-card .s-kpi .n{margin-top:3px;font:500 13px/1.4 @MONO@;color:var(--dim)}
 .s-card .s-foot{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
-  margin-top:24px;padding-top:16px;border-top:1px solid #232b36;
-  font:500 12.4px/1.4 @MONO@;color:#6e7681;letter-spacing:.04em}
+  margin-top:24px;padding-top:16px;border-top:1px solid var(--line);
+  font:500 12.4px/1.4 @MONO@;color:var(--dim);letter-spacing:.04em}
 /* 封面：温度计 + 2×2 指标卡（卡片纵向撑满，字放大），底部同样收读数 */
 .s-card.s-cover .s-main{justify-content:flex-start}
 .s-card.s-cover .comp{flex:1;display:flex;flex-direction:column;min-height:0}
@@ -101,16 +101,16 @@ INJECT_CSS = """
 .s-card.s-cover .cards .trio{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:10px}
 .s-card.s-cover .cards .trio b{display:block;font:600 20px/1 @MONO@;letter-spacing:-.02em;
   font-variant-numeric:tabular-nums}
-.s-card.s-cover .cards .trio i{display:block;font:500 11.5px/1 @MONO@;color:#6e7681;
+.s-card.s-cover .cards .trio i{display:block;font:500 11.5px/1 @MONO@;color:var(--dim);
   font-style:normal;margin-top:6px;letter-spacing:.06em}
 .s-card.s-cover .cards .card .x{font-size:12.4px!important;margin-top:6px;line-height:1.45}
 /* 封面主角：巨型读数 + 冰点判定 */
 .s-card.s-cover .hero{display:flex;align-items:baseline;gap:22px;margin:6px 0 20px}
-.s-card.s-cover .hero .hn{font:700 172px/0.84 @MONO@;letter-spacing:-.05em;color:#eef4fa;
+.s-card.s-cover .hero .hn{font:700 172px/0.84 @MONO@;letter-spacing:-.05em;color:var(--ink);
   font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:10px}
-.s-card.s-cover .hero .hn i{font-style:normal;font:600 30px/1 @MONO@;color:#8b949e}
+.s-card.s-cover .hero .hn i{font-style:normal;font:600 30px/1 @MONO@;color:var(--muted)}
 .s-card.s-cover .hero .hw{font-size:40px;font-weight:680;letter-spacing:-.02em;
-  color:#58a6ff;padding-bottom:14px}
+  color:var(--actual);padding-bottom:14px}
 /* 温度计放大成色带（CSS 画的，直接把条加粗、刻度加大，读数交给上面的巨型数字） */
 .s-card.s-cover .gauge{padding:24px 24px 22px;border-radius:14px}
 .s-card.s-cover .gauge .gwrap{padding:26px 2px 0}
@@ -122,10 +122,10 @@ INJECT_CSS = """
 /* 今日各层涨跌（中位）：5 条横杠，一眼看出谁最弱 */
 .s-card .s-bars{flex:1;display:flex;flex-direction:column;justify-content:space-between;
   gap:9px;padding-bottom:6px}
-.s-card .s-bars .bt{font:600 12px/1 @MONO@;letter-spacing:.22em;color:#6e7681}
+.s-card .s-bars .bt{font:600 12px/1 @MONO@;letter-spacing:.22em;color:var(--dim)}
 .s-card .s-bars .row{display:flex;align-items:center;gap:16px}
-.s-card .s-bars .nm{flex:0 0 112px;text-align:right;font-size:17px;color:#c9d5e1}
-.s-card .s-bars .tr{flex:1;height:34px;background:#151b23;border-radius:9px;overflow:hidden}
+.s-card .s-bars .nm{flex:0 0 112px;text-align:right;font-size:17px;color:var(--ink-2)}
+.s-card .s-bars .tr{flex:1;height:34px;background:var(--paper-2);border-radius:9px;overflow:hidden}
 .s-card .s-bars .fi{height:100%;border-radius:9px}
 .s-card .s-bars .vv{flex:0 0 92px;text-align:right;font:600 22px/1 @MONO@;
   font-variant-numeric:tabular-nums}
@@ -353,17 +353,17 @@ def kpi_strip(rows: list[dict]) -> str:
     t = by.get("温度计指数", {}).get("v", "")
     if t:
         num, _, word = t.partition("·")
-        cells.append(cell(num.strip(), "分", "温度", word.strip(), "#e6edf3"))
+        cells.append(cell(num.strip(), "分", "温度", word.strip(), "var(--ink)"))
     m = by.get("名单中位", {})
     if m:
         cells.append(cell(m["v"], "", "名单中位", "41 家 A + 13 家 H",
-                          "#3fb950" if "down" in m.get("cls", "") else
-                          "#f85149" if "up" in m.get("cls", "") else ""))
+                          "var(--down)" if "down" in m.get("cls", "") else
+                          "var(--up)" if "up" in m.get("cls", "") else ""))
     e = by.get("超额 vs 沪深300", {})
     if e:
         cells.append(cell(e["v"], "", "超额 vs 沪深300", "宽基 beta 口径",
-                          "#3fb950" if "down" in e.get("cls", "") else
-                          "#f85149" if "up" in e.get("cls", "") else ""))
+                          "var(--down)" if "down" in e.get("cls", "") else
+                          "var(--up)" if "up" in e.get("cls", "") else ""))
     if not cells:
         return ""
     return (f'<div class="kick">本期读数</div>'
@@ -380,7 +380,7 @@ def cover_cards(cards_html: str) -> str:
     if len(vals) != 3:
         return cards_html
     cells = "".join(
-        f'<div><b style="color:{"#3fb950" if v.startswith("-") else "#f85149"}">{v}</b>'
+        f'<div><b style="color:{"var(--down)" if v.startswith("-") else "var(--up)"}">{v}</b>'
         f'<i>{cap}</i></div>'
         for v, cap in zip(vals, ("今", "5日", "20日")))
     block = ('<div class="card"><div class="k">名单中位涨跌</div>'
@@ -400,8 +400,8 @@ def layer_bars(layers: list[dict]) -> str:
     out = []
     for x in rows:
         v = x["v"]
-        color = "#3fb950" if v < 0 else "#f85149"       # A 股习惯：绿跌红涨
-        edge = "#2ea043" if v < 0 else "#da3633"
+        color = "var(--down)" if v < 0 else "var(--up)"       # A 股习惯：绿跌红涨
+        edge = "var(--down)" if v < 0 else "var(--up)"
         pct = min(100.0, abs(v) / mx * 100.0)
         out.append(
             f'<div class="row"><div class="nm">{x["name"]}</div>'

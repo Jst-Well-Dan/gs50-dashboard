@@ -38,6 +38,26 @@ def now_cst():
     return dt.datetime.now(CST)
 
 # 仓库地址：页脚那个 GitHub 图标指这里。只有图标 + title，不占版面、不拉外部图片。
+# ---------------------------------------------------------------- 主题
+# 色板 / 字体 / 涨跌语义 / SVG 属性映射都在 theme.css 里，与 Dan's Investment Dashboard
+# 同一份（站点仓库 scripts/sync_board_theme.py 同步过来）。改动请改站点那边再同步，
+# 不要在这里加色值。
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _theme(path):
+    with open(os.path.join(HERE, path), encoding="utf-8") as fh:
+        return fh.read()
+
+
+THEME_CSS = _theme("theme.css")
+THEME_JS = _theme("theme.js")
+
+# 明暗开关：放在顶栏右侧，与日期切换同一档高度
+THEME_BTN = ('<button class="theme-toggle" type="button" aria-pressed="false" '
+             'title="切换浅色 / 深色">◐<span class="tt-lab">深色</span></button>')
+
+
 REPO_URL = "https://github.com/Jst-Well-Dan/gs50-dashboard"
 GH_ICON = (f'<a class="gh" href="{REPO_URL}" target="_blank" rel="noopener"'
            f' title="源码仓库：{REPO_URL}" aria-label="GitHub 源码仓库">'
@@ -76,8 +96,9 @@ def parse_args(argv):
 HKD_CNY = 0.91
 LAYERS = ["Semiconductors", "Infrastructure", "Power",
           "Application (Physical)", "Application (AI+)", "AI Model"]
-COLOR = {"Semiconductors": "#58a6ff", "Infrastructure": "#39c5cf", "Power": "#d29922",
-         "Application (Physical)": "#bc8cff", "Application (AI+)": "#f778ba", "AI Model": "#a5d6ff"}
+COLOR = {"Semiconductors": "var(--series-4)", "Infrastructure": "var(--series-3)",
+         "Power": "var(--guide)", "Application (Physical)": "var(--series-5)",
+         "Application (AI+)": "var(--plum-f)", "AI Model": "var(--ind-f)"}
 SHORT = {"Semiconductors": "半导体", "Infrastructure": "基础设施", "Power": "电力",
          "Application (Physical)": "应用·物理", "Application (AI+)": "应用·AI+", "AI Model": "模型"}
 BENCH = {"000300": "沪深300", "399006": "创业板指", "000688": "科创50", "000001": "上证指数",
@@ -110,7 +131,8 @@ STYLE_BENCH = {"A": "创业板指", "HK": "恒生科技"}
 
 
 # ------------------------------------------------------------------ 工具
-UP, DOWN, FLAT = "#f85149", "#3fb950", "#8b949e"   # A 股习惯：涨红、跌绿
+# 语义色一律用主题令牌名：真源只有 tokens.css 一份，这里不再写色值。
+UP, DOWN, FLAT = "var(--up)", "var(--down)", "var(--muted)"   # A 股习惯：涨朱、跌石绿
 
 
 def esc(t):
@@ -139,15 +161,17 @@ def mult(v):
 
 
 def heat_color(v, lo=-8, hi=8, mid=0):
-    """收益 → 色深：涨红、跌绿（A 股习惯）"""
+    """收益 → 热力格的（底色令牌, 字色令牌）。
+
+    不再按 |t| 调透明度：色值只有一份（tokens.css），深浅两档一起变；
+    格内文字靠 --card / --ink 保住对比度，涨格用卡片色、跌格用墨色。"""
     if v is None or (isinstance(v, float) and math.isnan(v)):
-        return "#1a2028", "#6e7681"
-    t = max(-1.0, min(1.0, v / (hi if v > mid else abs(lo) or 1)))
-    base = (248, 81, 73) if v > 0 else (63, 185, 80) if v < 0 else (110, 118, 129)
-    a = 0.10 + 0.62 * abs(t)
-    bg = f"rgba({base[0]},{base[1]},{base[2]},{a:.2f})"
-    fg = "#e6edf3" if abs(t) > 0.45 else "#b9c6d4"
-    return bg, fg
+        return "var(--paper-2)", "var(--dim)"
+    if v > 0:
+        return "color-mix(in oklch, var(--up) 42%, var(--card))", "var(--card)"
+    if v < 0:
+        return "color-mix(in oklch, var(--down) 42%, var(--card))", "var(--card)"
+    return "var(--paper-2)", "var(--muted)"
 
 
 def zscores(series):
@@ -576,15 +600,15 @@ def build():
         if r.limit_down:
             tags.append(("跌停", DOWN))
         if not pd.isna(r.dist_hi60) and r.dist_hi60 > -1.0:
-            tags.append(("60日新高", "#d29922"))
+            tags.append(("60日新高", "var(--guide)"))
         if not pd.isna(r.dist_lo250) and r.dist_lo250 < 3:
-            tags.append(("逼近一年低", "#6e7681"))
+            tags.append(("逼近一年低", "var(--dim)"))
         if not pd.isna(r.amt_mult) and r.amt_mult >= 1.8:
-            tags.append((f"量能 {r.amt_mult:.1f}×", "#58a6ff"))
+            tags.append((f"量能 {r.amt_mult:.1f}×", "var(--actual)"))
         if not pd.isna(r.sigma60) and not pd.isna(r.pct_chg) and r.sigma60 > 0:
             z = r.pct_chg / r.sigma60
             if abs(z) >= 1.8:
-                tags.append((f"{z:+.1f}σ", "#bc8cff"))
+                tags.append((f"{z:+.1f}σ", "var(--series-3)"))
         if tags:
             moves.append({"name": r.name_cn, "code": r.code, "layer": r.ai_layer,
                           "sector": r.ai_sector, "pct": r.pct_chg, "amt": r.amount_yi, "tags": tags,
@@ -625,7 +649,7 @@ def sp_tip(r):
             f"今日 {r.pct_chg:+.2f}%")
 
 
-def sparkline(vals, w=86, h=22, color="#58a6ff", tip=""):
+def sparkline(vals, w=86, h=22, color="var(--actual)", tip=""):
     if not isinstance(vals, (list, tuple)) or len(vals) < 2:
         return "<span class='na'>—</span>"
     lo, hi = min(vals), max(vals)
@@ -714,16 +738,16 @@ def line_chart(days, series, title, sub, W=1120, H=300, fmt="{:.1f}%", zero=True
     def yy(v): return T + (H - T - B) * (hi - v) / (hi - lo)
 
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
-    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='{FT_S}'>{esc(sub)}</text>")
+    p.append(f"<text x='{L}' y='20' fill='var(--ink)' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
+    p.append(f"<text x='{L}' y='37' fill='var(--muted)' font-size='{FT_S}'>{esc(sub)}</text>")
     ticks = max(2, int(round((hi - lo) / step)))
     for k in range(ticks + 1):
         v = lo + step * k
         y = yy(v)
-        p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='#232b36'/>")
-        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{fmt.format(v)}</text>")
+        p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='var(--line)'/>")
+        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='var(--muted)' font-size='{FT_S}' text-anchor='end'>{fmt.format(v)}</text>")
     if zero and lo < 0 < hi:
-        p.append(f"<line x1='{L}' y1='{yy(0):.1f}' x2='{W-R}' y2='{yy(0):.1f}' stroke='#3d4a5c' stroke-dasharray='3 3'/>")
+        p.append(f"<line x1='{L}' y1='{yy(0):.1f}' x2='{W-R}' y2='{yy(0):.1f}' stroke='var(--line-strong)' stroke-dasharray='3 3'/>")
     step = max(1, n // 9)
     ticks_x = list(range(0, n, step))
     if ticks_x[-1] != n - 1:
@@ -731,7 +755,7 @@ def line_chart(days, series, title, sub, W=1120, H=300, fmt="{:.1f}%", zero=True
     multiyear = days[0][:4] != days[-1][:4]        # 跨年（今年以来 / 全部）标到年，不然月份会重名
     for i in ticks_x:
         lab = f"{days[i][2:4]}/{days[i][4:6]}" if multiyear else f"{days[i][4:6]}-{days[i][6:8]}"
-        p.append(f"<text x='{xx(i):.1f}' y='{H-B+16}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{lab}</text>")
+        p.append(f"<text x='{xx(i):.1f}' y='{H-B+16}' fill='var(--muted)' font-size='{FT_S}' text-anchor='middle'>{lab}</text>")
     labels = []
     for s in series:
         seg, started = [], False
@@ -772,13 +796,13 @@ def heatgrid(rows, cols, values, title, sub, W=1120, rowh=42, sep=None):
     cw = (W - L - 20) / len(cols)
     H = T + rowh * len(rows) + 26
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='2' y='18' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
-    p.append(f"<text x='2' y='35' fill='#8b949e' font-size='{FT_S}'>{esc(sub)}</text>")
+    p.append(f"<text x='2' y='18' fill='var(--ink)' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
+    p.append(f"<text x='2' y='35' fill='var(--muted)' font-size='{FT_S}'>{esc(sub)}</text>")
     for j, c in enumerate(cols):
-        p.append(f"<text x='{L+cw*(j+0.5):.1f}' y='{T-10}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{esc(c)}</text>")
+        p.append(f"<text x='{L+cw*(j+0.5):.1f}' y='{T-10}' fill='var(--muted)' font-size='{FT_S}' text-anchor='middle'>{esc(c)}</text>")
     for i, r in enumerate(rows):
         y = T + i * rowh
-        p.append(f"<text x='{L-10}' y='{y+rowh/2+4:.1f}' fill='#c9d5e1' font-size='{FT_S}' text-anchor='end'>{esc(r)}</text>")
+        p.append(f"<text x='{L-10}' y='{y+rowh/2+4:.1f}' fill='var(--ink-2)' font-size='{FT_S}' text-anchor='end'>{esc(r)}</text>")
         for j, c in enumerate(cols):
             v = values[i][j]
             bg, fg = heat_color(v)
@@ -788,7 +812,7 @@ def heatgrid(rows, cols, values, title, sub, W=1120, rowh=42, sep=None):
             p.append(f"<text x='{L+cw*(j+0.5):.1f}' y='{y+rowh/2+4:.1f}' fill='{fg}' font-size='{FT_S}' text-anchor='middle'>{txt}</text>")
     if sep is not None:
         x = L + cw * sep
-        p.append(f"<line x1='{x:.1f}' y1='{T-24}' x2='{x:.1f}' y2='{H-20}' stroke='#30363d' stroke-width='1'/>")
+        p.append(f"<line x1='{x:.1f}' y1='{T-24}' x2='{x:.1f}' y2='{H-20}' stroke='var(--line)' stroke-width='1'/>")
     p.append("</svg>")
     return "".join(p)
 
@@ -827,15 +851,15 @@ def quadrant(rows, title, sub, W=1120, H=420, foot=""):
     def yy(v): return T + (H - T - B) * (y1 - v) / (y1 - y0)
 
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
-    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='{FT_S}'>{esc(sub)}</text>")
-    p.append(f"<rect x='{L}' y='{T}' width='{W-L-R}' height='{H-T-B}' fill='#12171e' stroke='#232b36' rx='6'/>")
-    p.append(f"<line x1='{xx(1):.1f}' y1='{T}' x2='{xx(1):.1f}' y2='{H-B}' stroke='#3d4a5c' stroke-dasharray='4 4'/>")
-    p.append(f"<line x1='{L}' y1='{yy(0):.1f}' x2='{W-R}' y2='{yy(0):.1f}' stroke='#3d4a5c' stroke-dasharray='4 4'/>")
+    p.append(f"<text x='{L}' y='20' fill='var(--ink)' font-size='{FT_T}' font-weight='600'>{esc(title)}</text>")
+    p.append(f"<text x='{L}' y='37' fill='var(--muted)' font-size='{FT_S}'>{esc(sub)}</text>")
+    p.append(f"<rect x='{L}' y='{T}' width='{W-L-R}' height='{H-T-B}' fill='var(--card-2)' stroke='var(--line)' rx='6'/>")
+    p.append(f"<line x1='{xx(1):.1f}' y1='{T}' x2='{xx(1):.1f}' y2='{H-B}' stroke='var(--line-strong)' stroke-dasharray='4 4'/>")
+    p.append(f"<line x1='{L}' y1='{yy(0):.1f}' x2='{W-R}' y2='{yy(0):.1f}' stroke='var(--line-strong)' stroke-dasharray='4 4'/>")
     for lbl, tx, ty, col, anch in (("放量上涨", W - R - 14, T + 17, UP, "end"),
                                    ("放量下跌", W - R - 14, H - B - 9, DOWN, "end"),
-                                   ("缩量上涨", L + 12, T + 17, "#8b949e", "start"),
-                                   ("缩量下跌", L + 12, H - B - 9, "#8b949e", "start")):
+                                   ("缩量上涨", L + 12, T + 17, FLAT, "start"),
+                                   ("缩量下跌", L + 12, H - B - 9, FLAT, "start")):
         p.append(f"<text x='{tx}' y='{ty}' fill='{col}' font-size='{FT_S}' text-anchor='{anch}'>{lbl}</text>")
     draw = [r for r in rows if not (pd.isna(r["x"]) or pd.isna(r["y"]))]
     draw.sort(key=lambda r: (-r["y"], r["x"]))
@@ -863,18 +887,18 @@ def quadrant(rows, title, sub, W=1120, H=420, foot=""):
                                  [(xx(o["x"]), yy(o["y"]), _orad(o)) for o in draw if o is not r]):
                     continue
                 boxes.append((bx0, by - 11, bx1, by + 3))
-                p.append(f"<text x='{bx:.1f}' y='{by:.1f}' fill='#c9d5e1' font-size='{FT_S}' text-anchor='{anch}'>{esc(r['name'])}</text>")
+                p.append(f"<text x='{bx:.1f}' y='{by:.1f}' fill='var(--ink-2)' font-size='{FT_S}' text-anchor='{anch}'>{esc(r['name'])}</text>")
                 dy = None
                 break
             if dy is None:
                 break
     for v in [x for x in (0.8, 1.0, 1.25, 1.5, 2.0) if x0 <= x <= x1]:
-        p.append(f"<text x='{xx(v):.1f}' y='{H-B+16}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{v:.2f}×</text>")
+        p.append(f"<text x='{xx(v):.1f}' y='{H-B+16}' fill='var(--muted)' font-size='{FT_S}' text-anchor='middle'>{v:.2f}×</text>")
     for v in range(int(y0), int(y1) + 1, 2 if (y1 - y0) < 16 else 5):
         if v == 0:
             continue
-        p.append(f"<text x='{L-8}' y='{yy(v)+4:.1f}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{v:+d}%</text>")
-    p.append(f"<text x='{W-R}' y='{H-8}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{esc(foot or '横轴：成交额 / 20 日均　纵轴：当日中位涨跌　气泡：家数')}</text>")
+        p.append(f"<text x='{L-8}' y='{yy(v)+4:.1f}' fill='var(--muted)' font-size='{FT_S}' text-anchor='end'>{v:+d}%</text>")
+    p.append(f"<text x='{W-R}' y='{H-8}' fill='var(--muted)' font-size='{FT_S}' text-anchor='end'>{esc(foot or '横轴：成交额 / 20 日均　纵轴：当日中位涨跌　气泡：家数')}</text>")
     p.append("</svg>")
     return "".join(p)
 
@@ -896,7 +920,7 @@ def _box_free(x0, y0, x1, y1, boxes, dots, skip=None, pad=2):
     return True
 
 
-def place_label(name, x, y, r, dots, boxes, L, R, T, B, W, H, skip=None, fill="#9aa7b4"):
+def place_label(name, x, y, r, dots, boxes, L, R, T, B, W, H, skip=None, fill="var(--muted)"):
     """把一个名字放到某个点旁边：先右后左，再逐行上下错开。
 
     压到别的点或已经放下的标签就换下一个位置；所有位置都不行就不放——图和 tooltip 还在，
@@ -952,21 +976,21 @@ def dotplot(df, W=1120, H=470, ymin=8, ymax=600):
     def yy(v): return T + (H - T - B) * (ly1 - math.log10(max(min(v, ymax), ymin))) / (ly1 - ly0)
 
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>分层 PE（前瞻共识 NTM）</text>")
+    p.append(f"<text x='{L}' y='20' fill='var(--ink)' font-size='{FT_T}' font-weight='600'>分层 PE（前瞻共识 NTM）</text>")
     for k, line in enumerate(subs):
-        p.append(f"<text x='{L}' y='{37 + k * (FT_S + 3):.0f}' fill='#8b949e' font-size='{FT_S}'>{esc(line)}</text>")
+        p.append(f"<text x='{L}' y='{37 + k * (FT_S + 3):.0f}' fill='var(--muted)' font-size='{FT_S}'>{esc(line)}</text>")
     for v in (10, 20, 30, 50, 100, 200, 300):
         y = yy(v)
-        p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='#232b36'/>")
-        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{v}x</text>")
+        p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='var(--line)'/>")
+        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='var(--muted)' font-size='{FT_S}' text-anchor='end'>{v}x</text>")
 
     dots, boxes, wants, meds, layers_svg = [], [], [], [], []
     for i, lay in enumerate(layers):
         sx = df[df.ai_layer == lay]
         cx = L + bw * (i + .5)
-        chrome = [f"<line x1='{cx-bw*.44:.1f}' y1='{T}' x2='{cx-bw*.44:.1f}' y2='{H-B}' stroke='#1b2430'/>",
+        chrome = [f"<line x1='{cx-bw*.44:.1f}' y1='{T}' x2='{cx-bw*.44:.1f}' y2='{H-B}' stroke='var(--line-soft)'/>",
                   f"<text x='{cx}' y='{H-B+22}' fill='{COLOR[lay]}' font-size='{FT_S}' text-anchor='middle'>{SHORT[lay]}</text>",
-                  f"<text x='{cx}' y='{H-B+38}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>n={len(sx)}</text>"]
+                  f"<text x='{cx}' y='{H-B+38}' fill='var(--muted)' font-size='{FT_S}' text-anchor='middle'>n={len(sx)}</text>"]
         vals = sx.pe_ntm.dropna()
         drawn = vals[vals > 0]
         skipped = len(sx) - len(drawn)
@@ -974,16 +998,16 @@ def dotplot(df, W=1120, H=470, ymin=8, ymax=600):
         if skipped:
             why = (f"负 PE {skipped} 家不画" if neg == skipped else
                    f"{skipped} 家不画（负 PE {neg}）" if neg else f"无 PE {skipped} 家")
-            chrome.append(f"<text x='{cx}' y='{H-B+52}' fill='#6e7681' font-size='{FT_S}' text-anchor='middle'>"
+            chrome.append(f"<text x='{cx}' y='{H-B+52}' fill='var(--dim)' font-size='{FT_S}' text-anchor='middle'>"
                           f"{why}</text>")
         if not len(drawn):
             # 整层都画不出来（如模型层全是负 PE）：虚线框 + 明说，而不是留白让人以为漏了
             bx, bw_ = cx - bw * .30, bw * .60
             chrome.append(f"<rect x='{bx:.1f}' y='{T+26}' width='{bw_:.1f}' height='{H-B-T-56}' rx='9' "
-                          f"fill='#12171e' stroke='#39424e' stroke-dasharray='4 4'/>")
-            chrome.append(f"<text x='{cx}' y='{(T+H-B)/2:.1f}' fill='#7d8894' font-size='{FT_S}' "
+                          f"fill='var(--card-2)' stroke='var(--line-strong)' stroke-dasharray='4 4'/>")
+            chrome.append(f"<text x='{cx}' y='{(T+H-B)/2:.1f}' fill='var(--dim)' font-size='{FT_S}' "
                           f"text-anchor='middle'>全为负 PE 或无数</text>")
-            chrome.append(f"<text x='{cx}' y='{(T+H-B)/2+15:.1f}' fill='#6e7681' font-size='{FT_S}' "
+            chrome.append(f"<text x='{cx}' y='{(T+H-B)/2+15:.1f}' fill='var(--dim)' font-size='{FT_S}' "
                           f"text-anchor='middle'>画不出点</text>")
         if len(drawn):
             med = drawn.median()
@@ -1049,18 +1073,18 @@ def scatter(df, W=1120, H=470):
     def yy(p): return T + (H - T - B) * (ly1 - math.log10(min(max(p, py0), py1))) / (ly1 - ly0)
 
     p = [f"<svg viewBox='0 0 {W} {H}' xmlns='http://www.w3.org/2000/svg' font-family='ui-monospace,Menlo,Consolas,monospace'>"]
-    p.append(f"<text x='{L}' y='20' fill='#e6edf3' font-size='{FT_T}' font-weight='600'>贵不贵 × 增速配不配（PEG 视角）</text>")
-    p.append(f"<text x='{L}' y='37' fill='#8b949e' font-size='{FT_S}'>横轴 FY2/FY1 增速，纵轴 PE_NTM；虚线 = PEG 1 / 2 / 3，线下方 = 增速配得上估值　·　仅 A 股 {len(d)} 家</text>")
+    p.append(f"<text x='{L}' y='20' fill='var(--ink)' font-size='{FT_T}' font-weight='600'>贵不贵 × 增速配不配（PEG 视角）</text>")
+    p.append(f"<text x='{L}' y='37' fill='var(--muted)' font-size='{FT_S}'>横轴 FY2/FY1 增速，纵轴 PE_NTM；虚线 = PEG 1 / 2 / 3，线下方 = 增速配得上估值　·　仅 A 股 {len(d)} 家</text>")
     for g in (10, 20, 40, 100, 200, 400):
         x = xx(g)
-        p.append(f"<line x1='{x:.1f}' y1='{T}' x2='{x:.1f}' y2='{H-B}' stroke='#232b36'/>")
-        p.append(f"<text x='{x:.1f}' y='{H-B+18}' fill='#8b949e' font-size='{FT_S}' text-anchor='middle'>{g}%</text>")
+        p.append(f"<line x1='{x:.1f}' y1='{T}' x2='{x:.1f}' y2='{H-B}' stroke='var(--line)'/>")
+        p.append(f"<text x='{x:.1f}' y='{H-B+18}' fill='var(--muted)' font-size='{FT_S}' text-anchor='middle'>{g}%</text>")
     for v in (10, 20, 30, 50, 100, 200, 300, 500):
         y = yy(v)
-        p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='#232b36'/>")
-        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='#8b949e' font-size='{FT_S}' text-anchor='end'>{v}x</text>")
+        p.append(f"<line x1='{L}' y1='{y:.1f}' x2='{W-R}' y2='{y:.1f}' stroke='var(--line)'/>")
+        p.append(f"<text x='{L-8}' y='{y+4:.1f}' fill='var(--muted)' font-size='{FT_S}' text-anchor='end'>{v}x</text>")
     # PEG 等值线：PE = PEG × 增速
-    for k, colr in ((1, "#58a6ff"), (2, "#3d4a5c"), (3, "#3d4a5c")):
+    for k, colr in ((1, "var(--actual)"), (2, "var(--line-strong)"), (3, "var(--line-strong)")):
         g_lo = max(gx0, py0 / k)
         g_hi = min(gx1, py1 / k)
         if g_hi <= g_lo:
@@ -1069,20 +1093,20 @@ def scatter(df, W=1120, H=470):
                  f"stroke='{colr}' stroke-dasharray='5 4' opacity='.65'/>")
         lx_, ly_ = xx(g_lo * 1.08), yy(k * g_lo * 1.08)
         p.append(f"<text x='{lx_:.1f}' y='{ly_-6:.1f}' fill='{colr}' font-size='{FT_S}' text-anchor='start' opacity='.9'>PEG {k}</text>")
-    p.append(f"<text x='{L+8}' y='{T+16:.0f}' fill='#f85149' font-size='{FT_S}' opacity='.85'>↑ 贵：增速跟不上估值</text>")
-    p.append(f"<text x='{W-R-8}' y='{H-B-10:.0f}' fill='#3fb950' font-size='{FT_S}' text-anchor='end' opacity='.85'>↓ 便宜：增速配得上</text>")
+    p.append(f"<text x='{L+8}' y='{T+16:.0f}' fill='var(--up)' font-size='{FT_S}' opacity='.85'>↑ 贵：增速跟不上估值</text>")
+    p.append(f"<text x='{W-R-8}' y='{H-B-10:.0f}' fill='var(--down)' font-size='{FT_S}' text-anchor='end' opacity='.85'>↓ 便宜：增速配得上</text>")
     lx = L
     for lay in LAYERS:
         if not (d.ai_layer == lay).any():
             continue
         p.append(f"<circle cx='{lx+4:.1f}' cy='{H-16:.1f}' r='4.4' fill='{COLOR[lay]}' opacity='.8'/>")
-        p.append(f"<text x='{lx+11:.1f}' y='{H-12:.1f}' fill='#8b949e' font-size='{FT_S}'>{esc(SHORT[lay])}</text>")
+        p.append(f"<text x='{lx+11:.1f}' y='{H-12:.1f}' fill='var(--muted)' font-size='{FT_S}'>{esc(SHORT[lay])}</text>")
         lx += 14 + 14 * len(SHORT[lay])
     mx = max(float(pd.to_numeric(d.mcap_yi, errors="coerce").fillna(0).max()), 1)
     bubbles = []        # (优先级, 名字, x, y, 半径)：名字最后统一摆
     for _, r in d.iterrows():
         rr = 5 + 13 * math.sqrt((r.mcap_yi or 0) / mx)
-        col = COLOR.get(r.ai_layer, "#8b949e")
+        col = COLOR.get(r.ai_layer, FLAT)
         peg = r.pe_ntm / r.g_fwd if r.g_fwd else float("nan")
         tip = esc(f"{r.name_cn} · {SHORT.get(r.ai_layer, '')}\nPE NTM {r.pe_ntm:.0f}x · 增速 {r.g_fwd:+.0f}%\nPEG {peg:.2f}"
                   + ("" if pd.isna(r.mcap_yi) else f" · 市值 {r.mcap_yi:.0f} 亿"))
@@ -1097,7 +1121,7 @@ def scatter(df, W=1120, H=470):
     boxes, geo = [], [(b[2], b[3], b[4]) for b in bubbles]
     for j in sorted(range(len(bubbles)), key=lambda j: -bubbles[j][0])[:15]:
         _, name, x, y, rr = bubbles[j]
-        got = place_label(name, x, y, rr, geo, boxes, L, R, T, B, W, H, skip=j, fill="#c9d5e1")
+        got = place_label(name, x, y, rr, geo, boxes, L, R, T, B, W, H, skip=j, fill="var(--ink-2)")
         if got:
             txt, box = got
             p.append(txt)
@@ -1112,32 +1136,25 @@ def scatter(df, W=1120, H=470):
 FT_T = 15.6   # 图内标题
 FT_S = 13.6   # 其余全部：副标 / 说明 / 标签 / 轴标 / 单元值
 
-GAUGE_STOPS = [(0, "#2b3947"), (25, "#3d6b8f"), (45, "#7d8894"), (62, "#d29922"),
-               (80, "#f0883e"), (100, "#f85149")]
+# 温度分档 → 主题令牌。以前在 hex 之间做线性插值，插出来的颜色不在色板里；
+# 现在只给五档，色值全部来自 tokens.css，明暗两档自动跟着走。
+# 分档边界与 GAUGE_TICKS（冰点 / 偏冷 / 常温 / 升温 / 过热）一致。
+GAUGE_STOPS = [(25, "var(--series-4)"), (45, "var(--actual)"), (62, "var(--dim)"),
+               (80, "var(--guide)"), (100, "var(--up)")]
 
 
 def score_color(s):
     """温度分数 → 与刻度条同一套色带（侧栏徽标、标题强调共用）"""
     s = max(0.0, min(100.0, float(s)))
-    for i in range(len(GAUGE_STOPS) - 1):
-        a, b = GAUGE_STOPS[i], GAUGE_STOPS[i + 1]
-        if a[0] <= s <= b[0]:
-            t = (s - a[0]) / (b[0] - a[0])
-            ca = tuple(int(a[1][k:k + 2], 16) for k in (1, 3, 5))
-            cb = tuple(int(b[1][k:k + 2], 16) for k in (1, 3, 5))
-            return "#%02x%02x%02x" % tuple(int(ca[k] + (cb[k] - ca[k]) * t) for k in range(3))
+    for top, tok in GAUGE_STOPS:
+        if s <= top:
+            return tok
     return GAUGE_STOPS[-1][1]
 
 
-def _mix(c1, c2, t):
-    a = tuple(int(c1[k:k + 2], 16) for k in (1, 3, 5))
-    b = tuple(int(c2[k:k + 2], 16) for k in (1, 3, 5))
-    return "#%02x%02x%02x" % tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
-
-
-def score_ink(s, t=0.62):
-    """刻度色太暗（低分区尤其），文字用提亮版：留着色相，保住对比度"""
-    return _mix(score_color(s), "#eef4fa", t)
+# 侧栏徽标直接读分数档的颜色：令牌本身就是文字档，对比度已经过线，
+# 不再需要把颜色往白里混（原 score_ink 做的事）。
+score_ink = score_color
 
 
 GAUGE_TICKS = ((0, "冰点"), (25, "偏冷"), (45, "常温"), (62, "升温"), (80, "过热"))
@@ -1283,43 +1300,42 @@ document.addEventListener('mousemove', function (e) {
 </script>"""
 
 CSS = """
-:root{--bg:#0e1116;--panel:#161b22;--line:#232b36;--ink:#e6edf3;--dim:#8b949e;
---up:#f85149;--down:#3fb950;--part:#d29922;--accent:#58a6ff;--accent2:#bc8cff;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
---bar:56px;--side:206px}
+/* 色板 / 字体 / 涨跌语义来自 theme.css（与 Dan's Investment Dashboard 同一份），
+   这里只写版式，一律引 var(--…)。 */
+:root{--mono:var(--font-mono);--sans:var(--font-sans);--bar:56px;--side:206px}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
-::selection{background:#1f6feb66;color:#fff}
-*{scrollbar-width:thin;scrollbar-color:#2b3644 transparent}
+::selection{background:var(--sel-bg);color:var(--ink)}
+*{scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#2b3644;border-radius:9px;border:2px solid #0e1116}
-::-webkit-scrollbar-thumb:hover{background:#3d4a5c}
-:focus-visible{outline:2px solid #58a6ffcc;outline-offset:2px;border-radius:7px}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:9px;border:2px solid var(--paper)}
+::-webkit-scrollbar-thumb:hover{background:var(--line-strong)}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:7px}
 
 /* ---------- 顶栏：日期切换 ---------- */
-.bar{position:sticky;top:0;z-index:60;padding:7px 0;background:#0e1116e6;
+.bar{position:sticky;top:0;z-index:60;padding:7px 0;background:color-mix(in oklch, var(--paper) 90%, transparent);
   backdrop-filter:blur(14px) saturate(1.25);border-bottom:1px solid var(--line)}
 .bar-in{max-width:1380px;margin:0 auto;height:calc(var(--bar) - 14px);display:flex;align-items:center;gap:9px;padding:0 22px}
 .brand{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;letter-spacing:.01em;
 white-space:nowrap;color:var(--ink);text-decoration:none}
-.brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);outline:1px solid #58a6ff59;outline-offset:2px}
+.brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);outline:1px solid var(--line-strong);outline-offset:2px}
 .bar .sp{flex:1}
-.btn{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:9px 15px;border:1px solid #2b3644;
-border-radius:9px;background:#161b22;color:#c9d5e1;font:500 13.4px/1 inherit;text-decoration:none;
+.btn{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:9px 15px;border:1px solid var(--line-strong);
+border-radius:9px;background:var(--card);color:var(--ink-2);font:500 13.4px/1 inherit;text-decoration:none;
 white-space:nowrap;cursor:pointer;transition:background .16s,border-color .16s,color .16s,transform .12s}
-.btn:hover{background:#1c2430;border-color:#3d4a5c;color:#fff}
+.btn:hover{background:var(--paper-2);border-color:var(--line-strong);color:var(--ink)}
 .btn:active{transform:translateY(1px)}
 .btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.btn.pri{background:#123050;border-color:#1f6feb7a;color:#9ccbff}
-.btn.pri:hover{background:#173d63;border-color:#58a6ffaa;color:#dcefff}
-.btn.off{background:#12171e;border-color:#222a35;color:#8b949e;cursor:default;pointer-events:none}
+.btn.pri{background:var(--guide-bg);border-color:var(--brand-f);color:var(--brand)}
+.btn.pri:hover{background:var(--guide-bg);border-color:var(--brand-f);color:var(--ink)}
+.btn.off{background:var(--card-2);border-color:var(--line);color:var(--muted);cursor:default;pointer-events:none}
 .btn.dnav .dd{font:500 12.8px/1 var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
   clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .prog{position:absolute;left:0;right:0;bottom:-1px;height:2px}
-.prog i{display:block;height:2px;width:100%;background:#58a6ff;transform:scaleX(0);transform-origin:left;transition:transform .12s linear}
+.prog i{display:block;height:2px;width:100%;background:var(--actual);transform:scaleX(0);transform-origin:left;transition:transform .12s linear}
 
 /* ---------- 骨架：侧栏 + 正文 ---------- */
 .shell{max-width:1380px;margin:0 auto;padding:26px 22px 96px;display:grid;
@@ -1333,20 +1349,20 @@ main{min-width:0;max-width:1118px}
   padding-bottom:7px;margin-bottom:3px;border-bottom:1px solid var(--line);
   font:600 14px/1.2 var(--mono);letter-spacing:-.01em}
 .side-card .sc .lb{font:600 12.4px/1 inherit;color:var(--dim);letter-spacing:.06em}
-.side-card .sc .dt{color:#c9d5e1;font-variant-numeric:tabular-nums}
+.side-card .sc .dt{color:var(--ink-2);font-variant-numeric:tabular-nums}
 .date-line{display:none;margin:0 0 8px;font:500 12.8px/1.5 var(--mono);color:var(--dim)}
 .side-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
   margin-top:8px;font-size:12.6px;color:var(--dim)}
-.side-row b{font:600 13px/1.4 var(--mono);color:#dbe6f0;font-variant-numeric:tabular-nums}
+.side-row b{font:600 13px/1.4 var(--mono);color:var(--ink-2);font-variant-numeric:tabular-nums}
 .side-row b.up{color:var(--up)}
 .side-row b.down{color:var(--down)}
 .toc{display:flex;flex-direction:column;gap:1px}
 .toc a{position:relative;display:flex;align-items:center;gap:9px;padding:6px 10px;
   border-radius:0 7px 7px 0;color:var(--dim);text-decoration:none;font-size:13.2px;
   line-height:1.45;transition:background .14s,color .14s}
-.toc a i{font:500 12.4px/1 var(--mono);font-style:normal;color:#7d8894;width:13px;text-align:right;transition:color .14s}
-.toc a:hover{background:#141a22;color:#c9d5e1}
-.toc a.on{background:#18202b;color:var(--ink)}
+.toc a i{font:500 12.4px/1 var(--mono);font-style:normal;color:var(--dim);width:13px;text-align:right;transition:color .14s}
+.toc a:hover{background:var(--paper-2);color:var(--ink-2)}
+.toc a.on{background:var(--card-2);color:var(--ink)}
 .toc a.on i{color:var(--accent)}
 .toc a.on::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:2px;
   border-radius:2px;background:var(--accent)}
@@ -1359,12 +1375,12 @@ h1 .u{font-style:normal;font-size:.42em;font-weight:500;color:var(--dim);margin-
 .standfirst{margin:0;color:var(--dim);font-size:13.8px;max-width:76ch}
 h2{font-size:17px;margin:40px 0 9px;display:flex;align-items:baseline;gap:9px;letter-spacing:-.01em;
   scroll-margin-top:calc(var(--bar) + 18px)}
-h2 .n{font:600 12.6px/1 var(--mono);color:#7d8894;width:14px}
+h2 .n{font:600 12.6px/1 var(--mono);color:var(--dim);width:14px}
 h2 .meta{margin-left:auto;font:500 12.6px/1.4 var(--mono);color:var(--dim)}
-h3{font-size:13.8px;margin:20px 0 5px;color:#dbe6f0}
+h3{font-size:13.8px;margin:20px 0 5px;color:var(--ink-2)}
 .note{color:var(--dim);font-size:12.8px;margin:9px 0 0;max-width:1000px}
-.na{color:#8b949e}
-code{font-family:var(--mono);font-size:12.6px;background:#1c2430;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.na{color:var(--muted)}
+code{font-family:var(--mono);font-size:12.6px;background:var(--paper-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
 
 /* ---------- 卡片 ---------- */
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(166px,1fr));gap:10px;margin:18px 0 6px}
@@ -1377,10 +1393,10 @@ code{font-family:var(--mono);font-size:12.6px;background:#1c2430;border:1px soli
 .cards.metrics .card .k{margin-bottom:7px}
 .cards.metrics .x{display:flex;flex-direction:column;gap:1px;margin-top:auto}
 .cards.metrics .x>div{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-.cards.metrics .x span{color:#8b949e;font-size:12.6px;white-space:nowrap}
-.cards.metrics .x b{color:#c9d5e1;font-weight:600;font-size:12.6px;font-variant-numeric:tabular-nums;white-space:nowrap}
-.x-u{font-size:13.4px;color:#8b949e;font-family:inherit}
-.bullets{margin:10px 0 0;padding-left:18px;color:#c9d5e1;font-size:13.8px;max-width:940px}
+.cards.metrics .x span{color:var(--muted);font-size:12.6px;white-space:nowrap}
+.cards.metrics .x b{color:var(--ink-2);font-weight:600;font-size:12.6px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.x-u{font-size:13.4px;color:var(--muted);font-family:inherit}
+.bullets{margin:10px 0 0;padding-left:18px;color:var(--ink-2);font-size:13.8px;max-width:940px}
 .bullets li{margin:5px 0}
 
 /* ---------- 图表 / 表格 ---------- */
@@ -1395,17 +1411,20 @@ code{font-family:var(--mono);font-size:12.6px;background:#1c2430;border:1px soli
 .gauge .gk{position:absolute;left:1px;right:1px;top:0;height:14px}
 .gauge .gk span{position:absolute;top:0;font:500 12.6px/1 var(--mono);color:var(--dim);
   letter-spacing:.04em;white-space:nowrap}
+/* 刻度条：冰点→过热的六档。直接用令牌，不再和底色 color-mix ——
+   oklch 里把高彩度色和低彩度纸色混在一起会走到色相短弧的另一侧，
+   Chrome 与 Firefox 插出来的中间色一个偏青一个偏绿（实测）。 */
 .gbar{position:relative;height:16px;border-radius:8px;
-  background:linear-gradient(90deg,#2b3947 0%,#3d6b8f 25%,#7d8894 45%,#d29922 62%,#f0883e 80%,#f85149 100%)}
-.gbar i{position:absolute;top:-5px;width:3px;height:26px;border-radius:2px;background:#eef4fa;
-  box-shadow:0 0 0 3px #0e1116;transform:translateX(-1.5px)}
+  background:linear-gradient(90deg,var(--series-4) 0%,var(--actual) 25%,var(--dim) 45%,var(--guide) 62%,var(--series-5) 80%,var(--up) 100%)}
+.gbar i{position:absolute;top:-5px;width:3px;height:26px;border-radius:2px;background:var(--ink);
+  box-shadow:0 0 0 3px var(--paper);transform:translateX(-1.5px)}
 .gauge .gval{position:absolute;bottom:0;font:600 15.6px/1 var(--mono);letter-spacing:-.01em;white-space:nowrap}
 table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.4px}
 th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;
   font-variant-numeric:tabular-nums}
-thead th{background:#12171e;color:var(--dim);font-size:12.6px;letter-spacing:.05em;text-transform:uppercase;
+thead th{background:var(--card-2);color:var(--dim);font-size:12.6px;letter-spacing:.05em;text-transform:uppercase;
   font-weight:600;position:sticky;top:var(--bar);z-index:5}
-tbody tr:hover{background:#171e28}
+tbody tr:hover{background:var(--paper-2)}
 .scroll{overflow-x:auto}
 .tag{font:600 12.6px/1 var(--mono);padding:4px 7px;border-radius:4px;margin-right:4px;white-space:nowrap}
 
@@ -1413,35 +1432,35 @@ tbody tr:hover{background:#171e28}
 .chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:14px 0 0}
 .chips .lbl{font:600 12.4px/1 var(--mono);color:var(--dim);letter-spacing:.06em;margin-right:2px}
 .chip{min-height:34px;font:500 13px/1.4 inherit;padding:7px 14px;border:1px solid var(--line);
-  border-radius:999px;background:#12171e;color:#9aa7b4;cursor:pointer;
+  border-radius:999px;background:var(--card-2);color:var(--muted);cursor:pointer;
   transition:background .14s,border-color .14s,color .14s}
-.chip:hover{color:#e6edf3;border-color:#3d4a5c;background:#1a222c}
-.chip.on{background:#1f6feb22;border-color:#1f6feb99;color:#8ec5ff}
-.chip.on:hover{color:#b9dcff;border-color:#58a6ff}
+.chip:hover{color:var(--ink);border-color:var(--line-strong);background:var(--paper-2)}
+.chip.on{background:var(--guide-bg);border-color:var(--brand-f);color:var(--brand)}
+.chip.on:hover{color:var(--brand);border-color:var(--actual)}
 .tbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0 2px}
 .tbar input{font:13.2px/1.6 inherit;height:34px;padding:0 11px;border:1px solid var(--line);border-radius:8px;
-  background:#12171e;color:var(--ink);outline:none;width:172px;transition:border-color .14s}
-.tbar input:hover{border-color:#3d4a5c}
-.tbar input:focus{border-color:#1f6febaa;box-shadow:0 0 0 3px #1f6feb22}
-.tbar input::placeholder{color:#8b949e}
+  background:var(--card-2);color:var(--ink);outline:none;width:172px;transition:border-color .14s}
+.tbar input:hover{border-color:var(--line-strong)}
+.tbar input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--guide-bg)}
+.tbar input::placeholder{color:var(--muted)}
 .tbar .cnt{font:600 12.4px/1 var(--mono);color:var(--dim);margin-left:auto;font-variant-numeric:tabular-nums}
 th.sortable{cursor:pointer;user-select:none}
-th.sortable:hover{color:#c9d5e1}
+th.sortable:hover{color:var(--ink-2)}
 th.sortable::after{content:'⇅';font-size:11px;opacity:.35;margin-left:5px}
-th.asc::after{content:'▲';opacity:1;color:#58a6ff}
-th.desc::after{content:'▼';opacity:1;color:#58a6ff}
+th.asc::after{content:'▲';opacity:1;color:var(--actual)}
+th.desc::after{content:'▼';opacity:1;color:var(--actual)}
 [data-tip]{cursor:crosshair}
 [data-tip]:hover{filter:brightness(1.4)}
 #tip{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .1s;
-  background:#1b2230f5;border:1px solid #33414f;border-radius:7px;padding:6px 9px;color:#e6edf3;
+  background:color-mix(in oklch, var(--card) 96%, transparent);border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;color:var(--ink);
   font:12.6px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-  box-shadow:0 6px 14px #00000080;white-space:pre-line;max-width:300px}
+  box-shadow:0 6px 14px color-mix(in oklch, var(--band) 55%, transparent);white-space:pre-line;max-width:300px}
 
 /* ---------- 提示 / 折叠说明 ---------- */
-.warn{border:1px solid #4a3a14;background:#191505;border-radius:9px;padding:11px 14px;margin:14px 0;
-  font-size:13px;line-height:1.7;color:#e3d7bd}
-.warn b{color:#f0d9a0}
-details.fine{margin:10px 0 0;border:1px solid var(--line);border-radius:9px;background:#12171e}
+.warn{border:1px solid color-mix(in oklch, var(--honey-f) 55%, var(--card));background:var(--guide-bg);border-radius:9px;padding:11px 14px;margin:14px 0;
+  font-size:13px;line-height:1.7;color:var(--ink-2)}
+.warn b{color:var(--brand)}
+details.fine{margin:10px 0 0;border:1px solid var(--line);border-radius:9px;background:var(--card-2)}
 details.fine>summary{display:flex;align-items:center;gap:8px;padding:8px 13px;cursor:pointer;
   font-size:12.8px;color:var(--dim);list-style:none;transition:color .14s}
 details.fine>summary::-webkit-details-marker{display:none}
@@ -1449,16 +1468,16 @@ details.fine>summary::before{content:'';width:5px;height:5px;flex:none;
   border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;
   transform:rotate(-45deg);transition:transform .16s}
 details.fine[open]>summary::before{transform:rotate(45deg)}
-details.fine>summary:hover{color:#c9d5e1}
-details.fine .body{padding:0 14px 12px;color:#a9b6c3;font-size:13px;line-height:1.74}
+details.fine>summary:hover{color:var(--ink-2)}
+details.fine .body{padding:0 14px 12px;color:var(--ink-2);font-size:13px;line-height:1.74}
 details.fine .body p{margin:6px 0}
-details.fine .body b{color:#dbe6f0}
+details.fine .body b{color:var(--ink-2)}
 .figbox [data-fig]+[data-fig] .chart{margin-top:-2px}
 
 footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);
   color:var(--dim);font-size:12.8px}
-footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
-footer a:hover{color:#a5ceff}
+footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--line)}
+footer a:hover{color:var(--brand)}
 footer a.gh{display:inline-flex;align-items:center;border-bottom:none;vertical-align:-3px}
 footer a.gh svg{width:15px;height:15px;fill:currentColor}
 
@@ -1474,16 +1493,16 @@ footer a.gh svg{width:15px;height:15px;fill:currentColor}
   .shell{display:block;padding:18px 18px 80px}
   main{max-width:none}
   .side{position:sticky;top:var(--bar);z-index:55;max-height:none;overflow:visible;
-    margin:0 -18px 20px;padding:9px 18px;background:#0e1116f2;
+    margin:0 -18px 20px;padding:9px 18px;background:color-mix(in oklch, var(--paper) 95%, transparent);
     backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
   .side-card{display:none}
   .date-line{display:block}
   .toc{flex-direction:row;overflow-x:auto;gap:6px;padding:1px 0 3px;scrollbar-width:none}
   .toc::-webkit-scrollbar{display:none}
   .toc a{padding:5px 11px;border:1px solid var(--line);border-radius:999px;
-    background:#12171e;font-size:12.6px;white-space:nowrap}
+    background:var(--card-2);font-size:12.6px;white-space:nowrap}
   .toc a i{width:auto}
-  .toc a.on{border-color:#1f6feb88;background:#1f6feb1f;color:#9ccbff}
+  .toc a.on{border-color:var(--brand-f);background:var(--guide-bg);color:var(--brand)}
   .toc a.on::before{display:none}
   h2{scroll-margin-top:calc(var(--bar) + 66px)}
   thead th{top:calc(var(--bar) + 52px)}
@@ -1644,21 +1663,22 @@ def main():
     # ---- 异动表
     move_rows = ""
     for m in moves:
-        tags = "".join(f"<span class='tag' style='background:{c}22;color:{c};border:1px solid {c}55'>{esc(t)}</span>"
+        tags = "".join(f"<span class='tag' style='background:color-mix(in oklch,{c} 14%,transparent);"
+                       f"color:{c};border:1px solid color-mix(in oklch,{c} 34%,transparent)'>{esc(t)}</span>"
                        for t, c in m["tags"])
-        lay_c = COLOR.get(m["layer"], "#8b949e")
+        lay_c = COLOR.get(m["layer"], FLAT)
         bmed = m.get("board_med", float("nan"))
         verdict = ""
         if not pd.isna(bmed) and not pd.isna(m["pct"]):
             verdict = ("独走" if (m["pct"] - bmed) > 2.5 else
                        "背离" if (m["pct"] - bmed) < -2.5 else "共振")
         move_rows += (
-            f"<tr><td><b>{esc(m['name'])}</b><div style='font-size:12.6px;color:#8b949e'>{esc(m['code'])}</div></td>"
+            f"<tr><td><b>{esc(m['name'])}</b><div style='font-size:12.6px;color:var(--muted)'>{esc(m['code'])}</div></td>"
             f"<td><span style='color:{lay_c};font-size:12.6px'>{esc(SHORT.get(m['layer'], m['layer']))}</span>"
-            f"<div style='font-size:12.6px;color:#8b949e'>{esc(sec_cn(m.get('sector')))}</div></td>"
+            f"<div style='font-size:12.6px;color:var(--muted)'>{esc(sec_cn(m.get('sector')))}</div></td>"
             f"<td style='text-align:right'>{pct(m['pct'], 2)}</td>"
             f"<td style='text-align:right' data-tip='{esc(m.get('board_tip', ''))}'>{pct(bmed, 1)} "
-            f"<span style='color:#8b949e;font-size:12.6px'>{verdict}</span></td>"
+            f"<span style='color:var(--muted);font-size:12.6px'>{verdict}</span></td>"
             f"<td style='text-align:right'>{num(m['turn'], 2, '%')}</td>"
             f"<td style='text-align:right' data-tip='{esc(amt_tip(m))}'>{num(m['amt_mult'], 2, '×')}</td>"
             f"<td>{tags}</td></tr>")
@@ -1689,7 +1709,7 @@ def main():
             f"<tr data-mkt='{r.market}' data-layer='{esc(r.ai_layer)}' data-key='{esc((str(r.name_cn) + str(r.code)).lower())}'>"
             f"<td><b>{esc(r.name_cn)}</b></td>"
             f"<td><span style='color:{COLOR.get(r.ai_layer, '#8b949e')};font-size:12.6px'>{esc(SHORT.get(r.ai_layer, r.ai_layer))}</span>"
-            f"<div style='font-size:12.6px;color:#8b949e'>{esc(sec_cn(r.ai_sector))}</div></td>"
+            f"<div style='font-size:12.6px;color:var(--muted)'>{esc(sec_cn(r.ai_sector))}</div></td>"
             f"<td>{r.market}</td>"
             f"<td style='text-align:right'{ds(r.pct_chg)}>{pct(r.pct_chg, 2)}</td>"
             f"<td style='text-align:right'{ds(r.ret5)}>{pct(r.ret5, 1)}</td>"
@@ -1698,7 +1718,7 @@ def main():
             f"<td style='text-align:right'{ds(r.ret_ytd)} data-tip='{ytd_tip(r.code)}'>{pct(r.ret_ytd, 1)}</td>"
             f"<td style='text-align:right'{ds(r.amt_mult)} data-tip='{quant_tip(r)}'>{num(r.amt_mult, 2, '×')}</td>"
             f"<td style='text-align:right'{ds(r.dist_hi60)}>{pct(r.dist_hi60, 0, sign=False)}</td>"
-            f"<td style='text-align:right'{ds(pe)}>{num(pe, 0, 'x')} <span style='color:#8b949e;font-size:12.6px'>{pe_lbl}</span></td>"
+            f"<td style='text-align:right'{ds(pe)}>{num(pe, 0, 'x')} <span style='color:var(--muted);font-size:12.6px'>{pe_lbl}</span></td>"
             f"<td style='text-align:right'{ds(r.mcap_yi)}>{num(r.mcap_yi, 0)}</td>"
             f"<td>{sparkline(r.spark, tip=sp_tip(r))}</td></tr>")
 
@@ -1768,7 +1788,7 @@ def main():
                     vals = list(_rebase(nsub).values)
                 ser.append({"name": SHORT[l], "color": COLOR[l], "values": vals})
             if base == "abs":
-                ser.append({"name": "沪深300", "color": "#6e7681", "values": list(_rebase(bsub).values), "dash": True})
+                ser.append({"name": "沪深300", "color": "var(--dim)", "values": list(_rebase(bsub).values), "dash": True})
                 title = "层间强弱（绝对涨跌，等权净值）"
                 sub = f"灰虚线 = 沪深300　·　{SPAN_LBL[span]}"
             else:
@@ -1824,12 +1844,12 @@ def main():
                          "n": int(r.get("n", 0)), "ntxt": f"层内 {int(r.get('n', 0))} 家"})
         for _, b in top_b.iterrows():
             x = amt_win(board_amt[b.bk], span) if b.bk in board_amt.columns else float("nan")
-            rows.append({"name": b.board, "color": "#8b949e", "x": float(x),
+            rows.append({"name": b.board, "color": FLAT, "x": float(x),
                          "y": float(b.get(ycol_l[span], float("nan"))), "size": 40,
                          "n": int(b.get("listed_n", 0)),
                          "ntxt": f"名单内 {int(b.get('listed_n', 0))} 家 / 全成分 {int(b.get('n', 0))} 家"})
         foot = f"横轴：{xdesc}　纵轴：{ydesc}"
-        n_grey = sum(1 for r in rows if r["color"] == "#8b949e" and not pd.isna(r["y"]))
+        n_grey = sum(1 for r in rows if r["color"] == FLAT and not pd.isna(r["y"]))
         sub = (("灰点 = 相关板块（成交额前 5，同口径只算名单内成分）　·　" if n_grey else "")
                + f"右上 放量上涨 / 右下 放量下跌　·　{lbl}口径")
         if len(days) <= 1:
@@ -1975,7 +1995,9 @@ def main():
 
     html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI 主题每日复盘 · {day}</title><style>{CSS}</style></head><body>
+<meta name="color-scheme" content="light dark">
+<title>AI 主题每日复盘 · {day}</title><style>{THEME_CSS}</style><style>{CSS}</style>
+<script>{THEME_JS}</script></head><body>
 <div class="bar"><div class="bar-in">
 <a class="brand" href="index.html"><span class="dot"></span>AI 主题复盘</a>
 <span class="sp"></span>
@@ -1983,6 +2005,7 @@ def main():
 {nav_button(next_day, 'next')}
 <a class="btn" href="archive.html" title="全部日期" aria-label="全部日期"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg><span class="lb">全部日期</span></a>
 {latest_btn}
+{THEME_BTN}
 </div><div class="prog"><i id="prog"></i></div></div>
 <div class="shell">
 <aside class="side">
@@ -2009,8 +2032,8 @@ def main():
 {gauge(D['score'], D['mood'], gauge_tip)}
 <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(166px,1fr))">
 <div class="card"><div class="k">名单中位涨跌（今 / 5日 / 20日）</div>
-<div class="v" style="font-size:17px">{theme['median']:+.2f}% <span style="color:#8b949e">/</span>
-{pct(a_panel.ret5.median(), 1)} <span style="color:#8b949e">/</span> {pct(a_panel.ret20.median(), 1)}</div></div>
+<div class="v" style="font-size:17px">{theme['median']:+.2f}% <span style="color:var(--muted)">/</span>
+{pct(a_panel.ret5.median(), 1)} <span style="color:var(--muted)">/</span> {pct(a_panel.ret20.median(), 1)}</div></div>
 <div class="card"><div class="k">量能倍数（名单 / 均值）</div>
 <div class="v" style="font-size:17px">{mult(D['theme_amt_ratio'])}</div>
 <div class="x">全市场 {stats['amount']:,.0f} 亿（{mult(D['amt_ratio'])}，环比 {chg_amt}）</div></div>
@@ -2024,8 +2047,8 @@ def main():
 
 <h2 id="s2"><span class="n">2</span>广度与分化</h2>
 <div class="chart">{line_chart(days, [
-    {"name": "名单中位(日涨跌)", "color": "#58a6ff", "values": [v for v in D['eq_pct'].values]},
-    {"name": "全市场中位", "color": "#6e7681", "values": mkt_med_vals, "dash": True}],
+    {"name": "名单中位(日涨跌)", "color": "var(--actual)", "values": [v for v in D['eq_pct'].values]},
+    {"name": "全市场中位", "color": "var(--dim)", "values": mkt_med_vals, "dash": True}],
     "每日中位涨跌：名单 vs 全市场", "两线之差 = 主题当天的相对强弱", H=260)}</div>
 {lay_switch}
 

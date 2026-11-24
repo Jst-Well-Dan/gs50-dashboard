@@ -28,6 +28,19 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
+
+# ---------------------------------------------------------------- 主题
+# 与 build_gs50_dashboard.py 共用 scripts/theme.css（站点仓库同步产物）
+def _theme(name):
+    with open(os.path.join(HERE, name), encoding="utf-8") as fh:
+        return fh.read()
+
+
+THEME_CSS = _theme("theme.css")
+THEME_JS = _theme("theme.js")
+THEME_BTN = ('<button class="theme-toggle" type="button" aria-pressed="false" '
+             'title="切换浅色 / 深色">◐<span class="tt-lab">深色</span></button>')
+
 # 时间一律用北京时间：runner 是 UTC，datetime.now() 会比页面上写的 CST 差 8 小时。
 CST = __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
 
@@ -40,8 +53,8 @@ def now_cst():
 FT_T = 15.6   # 图内标题
 FT_S = 13.6   # 其余全部：副标 / 说明 / 标签 / 轴标 / 单元值
 
-UP, DOWN, FLAT = "#f85149", "#3fb950", "#8b949e"
-ACCENT, DIM, PURPLE = "#58a6ff", "#8b949e", "#bc8cff"
+UP, DOWN, FLAT = "var(--up)", "var(--down)", "var(--muted)"
+ACCENT, DIM, PURPLE = "var(--actual)", "var(--muted)", "var(--series-3)"
 
 # 仓库地址：页脚那个 GitHub 图标指这里。只有图标 + title，不占版面、不拉外部图片。
 REPO_URL = "https://github.com/Jst-Well-Dan/gs50-dashboard"
@@ -56,14 +69,11 @@ GH_ICON = (f'<a class="gh" href="{REPO_URL}" target="_blank" rel="noopener"'
            ' 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>')
 
 CSS = """
-:root{--bg:#0e1116;--panel:#161b22;--line:#232b36;--ink:#e6edf3;--dim:#8b949e;
---up:#f85149;--down:#3fb950;--accent:#58a6ff;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
 .wrap{max-width:1180px;margin:0 auto;padding:40px 26px 90px}
 .kicker{font:600 12.4px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
-.kicker a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
+.kicker a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--line)}
 h1{font-size:27px;margin:0 0 8px;letter-spacing:-.01em}
 .sub{color:var(--dim);font-size:13.9px;margin:0;max-width:86ch}
 header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:8px}
@@ -80,42 +90,42 @@ h2 .n{font:600 12.4px/1 var(--mono);color:var(--dim);border:1px solid var(--line
 .chart svg text{pointer-events:none}
 table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.4px}
 th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
-thead th{background:#12171e;color:var(--dim);font-size:12.6px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;
+thead th{background:var(--card-2);color:var(--dim);font-size:12.6px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;
   position:sticky;top:0;z-index:4}
-tbody tr:hover{background:#171e28}
+tbody tr:hover{background:var(--paper-2)}
 td a{color:var(--accent);text-decoration:none;font-family:var(--mono)}
-td a:hover{color:#a5ceff;text-decoration:underline}
+td a:hover{color:var(--brand);text-decoration:underline}
 .note{color:var(--dim);font-size:12.8px;margin:9px 0 0}
-.na{color:#4d5866}
+.na{color:var(--dim)}
 /* ---------- 逐日一览：按月折叠 + 月份跳转条 ---------- */
 .months{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 12px}
 .months a{font:500 12.8px/1 var(--mono);padding:8px 12px;border:1px solid var(--line);border-radius:9px;
-  background:#12171e;color:#c9d5e1;text-decoration:none;transition:background .14s,border-color .14s,color .14s}
-.months a:hover{background:#1c2430;border-color:#3d4a5c;color:#fff}
-.months a.on{border-color:#1f6feb88;background:#1f6feb1f;color:#9ccbff}
+  background:var(--card-2);color:var(--ink-2);text-decoration:none;transition:background .14s,border-color .14s,color .14s}
+.months a:hover{background:var(--paper-2);border-color:var(--line-strong);color:var(--ink)}
+.months a.on{border-color:var(--brand-f);background:var(--guide-bg);color:var(--brand)}
 details.mon{border-bottom:1px solid var(--line);scroll-margin-top:12px}
 details.mon>summary{display:flex;align-items:baseline;gap:11px;padding:12px 2px;cursor:pointer;
-  list-style:none;font-size:13.6px;color:#dbe6f0;transition:color .14s}
+  list-style:none;font-size:13.6px;color:var(--ink-2);transition:color .14s}
 details.mon>summary::-webkit-details-marker{display:none}
 details.mon>summary::before{content:'';width:5px;height:5px;flex:none;margin-top:7px;
-  border-right:1.6px solid #6e7681;border-bottom:1.6px solid #6e7681;
+  border-right:1.6px solid var(--dim);border-bottom:1.6px solid var(--dim);
   transform:rotate(-45deg);transition:transform .16s}
 details.mon[open]>summary::before{transform:rotate(45deg)}
-details.mon>summary:hover{color:#fff}
-details.mon>summary .m{font:600 13.4px/1 var(--mono);color:#e6edf3;letter-spacing:-.01em}
+details.mon>summary:hover{color:var(--ink)}
+details.mon>summary .m{font:600 13.4px/1 var(--mono);color:var(--ink);letter-spacing:-.01em}
 details.mon>summary .s{font:500 12.6px/1 var(--mono);color:var(--dim)}
 details.mon[open]>summary{border-bottom:1px solid var(--line)}
 details.mon table{margin:0}
 .scroll{overflow-x:auto}
 .scroll table{min-width:1120px}
-code{font-family:var(--mono);font-size:12.6px;background:#1c2430;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+code{font-family:var(--mono);font-size:12.6px;background:var(--paper-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
 #tip{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .1s;
-background:#1b2230f5;border:1px solid #33414f;border-radius:7px;padding:6px 9px;color:#e6edf3;
-font:12.6px/1.55 inherit;box-shadow:0 6px 14px #00000080;white-space:pre-line;max-width:300px}
+background:color-mix(in oklch, var(--card) 96%, transparent);border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;color:var(--ink);
+font:12.6px/1.55 inherit;box-shadow:0 6px 14px color-mix(in oklch, var(--band) 55%, transparent);white-space:pre-line;max-width:300px}
 [data-tip]{cursor:crosshair}
 [data-tip]:hover{filter:brightness(1.4)}
 footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:12.8px}
-footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
+footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--line)}
 footer a.gh{display:inline-flex;align-items:center;border-bottom:none;vertical-align:-3px}
 footer a.gh svg{width:15px;height:15px;fill:currentColor}
 /* 表头吸顶：只有在 .scroll 不自己当滚动容器时才真正贴着窗口（所以就放在 .scroll 之后） */
@@ -264,9 +274,9 @@ def score_chart(rows, W=1120, H=210, H2=104):
 
     parts = [f"<svg viewBox='0 0 {W} {total_h}' role='img'>"]
     # ---------------- 上：温度分
-    for v, col in ((25, "#3fb950"), (62, "#d29922"), (80, "#f85149")):
+    for v, col in ((25, "var(--down)"), (62, "var(--guide)"), (80, "var(--up)")):
         parts.append(f"<line x1='{pad_l}' y1='{Yt(v):.1f}' x2='{W - pad_r}' y2='{Yt(v):.1f}' "
-                     f"stroke='{col}33' stroke-dasharray='3 4'/>"
+                     f"stroke='{mixa(col, .20)}' stroke-dasharray='3 4'/>"
                      f"<text x='{pad_l - 8}' y='{Yt(v) + 4:.1f}' fill='{DIM}' font-size='{FT_S}' "
                      f"text-anchor='end' font-family='ui-monospace'>{v}</text>")
     pts = " ".join(f"{X(i):.1f},{Yt(r['score']):.1f}" for i, r in enumerate(rows) if ok(r.get("score")))
@@ -288,13 +298,13 @@ def score_chart(rows, W=1120, H=210, H2=104):
     parts.append(f"<text x='{pad_l}' y='{v_top - 14:.1f}' fill='{DIM}' font-size='{FT_S}' "
                  f"font-family='ui-monospace'>10 日波动率 %</text>"
                  f"<line x1='{pad_l}' y1='{v_top - 6}' x2='{W - pad_r}' y2='{v_top - 6}' "
-                 f"stroke='#232b36'/>")
+                 f"stroke='var(--line)'/>")
     if vmax > VOL_HOT + 0.2:      # 剧烈区淡红底（先画，压在最底下）
         parts.append(f"<rect x='{pad_l}' y='{Yv(vmax):.1f}' width='{iw:.1f}' "
-                     f"height='{Yv(VOL_HOT) - Yv(vmax):.1f}' fill='#f8514910'/>")
+                     f"height='{Yv(VOL_HOT) - Yv(vmax):.1f}' fill='var(--up)' opacity='.08'/>")
     for v, col in ((VOL_CALM, UP), (VOL_HOT, DOWN)):
         parts.append(f"<line x1='{pad_l}' y1='{Yv(v):.1f}' x2='{W - pad_r}' y2='{Yv(v):.1f}' "
-                     f"stroke='{col}33' stroke-dasharray='3 4'/>"
+                     f"stroke='{mixa(col, .20)}' stroke-dasharray='3 4'/>"
                      f"<text x='{pad_l - 8}' y='{Yv(v) + 4:.1f}' fill='{DIM}' font-size='{FT_S}' "
                      f"text-anchor='end' font-family='ui-monospace'>{v:g}</text>")
     vpts = [(i, v) for i, v in enumerate(vol) if v is not None]
@@ -352,7 +362,7 @@ def bar_chart(rows, key, lines, tag, W=1120, H=210):
         return pad_t + ih / 2 - ih / 2 * (max(-span, min(span, v)) / span)
 
     parts = [f"<svg viewBox='0 0 {W} {H}' role='img'>",
-             f"<line x1='{pad_l}' y1='{Y(0):.1f}' x2='{W - pad_r}' y2='{Y(0):.1f}' stroke='#232b36'/>",
+             f"<line x1='{pad_l}' y1='{Y(0):.1f}' x2='{W - pad_r}' y2='{Y(0):.1f}' stroke='var(--line)'/>",
              f"<text x='{pad_l - 8}' y='{Y(span):.1f}' fill='{DIM}' font-size='{FT_S}' text-anchor='end' "
              f"font-family='ui-monospace'>{span:.1f}%</text>",
              f"<text x='{pad_l - 8}' y='{Y(-span):.1f}' fill='{DIM}' font-size='{FT_S}' text-anchor='end' "
@@ -406,7 +416,7 @@ TH_ROW = ("<tr><th>日期</th><th style='text-align:right'>温度</th>"
 def day_row(r):
     """逐日表的一行（日期只用 MM-DD：年份在月份分组标题里）"""
     sc, e = r.get("score"), r.get("excess")
-    sc_col = DOWN if ok(sc) and sc < 45 else ("#d29922" if not ok(sc) or sc < 62 else UP)
+    sc_col = DOWN if ok(sc) and sc < 45 else ("var(--guide)" if not ok(sc) or sc < 62 else UP)
     return (f"<tr><td><a href='{r['day']}.html' title='{dlabel(r['day'])}'>{r['day'][4:6]}-{r['day'][6:]}</a></td>"
             f"<td style='text-align:right'><span style='color:{sc_col};font-family:var(--mono)'>"
             f"{f'{sc:.0f}' if ok(sc) else '—'}</span></td>"
@@ -489,7 +499,9 @@ def build(docs_dir):
 
     html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI 主题每日复盘 · 历史归档（{len(rows)} 期）</title><style>{CSS}</style></head>
+<meta name="color-scheme" content="light dark">
+<title>AI 主题每日复盘 · 历史归档（{len(rows)} 期）</title>
+<style>{THEME_CSS}</style><style>{CSS}</style><script>{THEME_JS}</script></head>
 <body><div class="wrap">
 <header>
 <div class="kicker">AI 主题每日复盘 · 历史归档　·　<a href="index.html">← 首页</a></div>
@@ -575,9 +587,9 @@ PORTAL = """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <title>AI 主题每日复盘</title>
 <meta http-equiv="refresh" content="0; url=$target">
-<style>body{background:#0d1117;color:#c9d5e1;font:15px/1.7 ui-monospace,Menlo,Consolas,monospace;
+<style>body{background:var(--paper);color:var(--ink-2);font:15px/1.7 ui-monospace,Menlo,Consolas,monospace;
 display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}
-a{color:#58a6ff}small{color:#8b949e}</style></head>
+a{color:var(--brand)}small{color:var(--muted)}</style></head>
 <body><div>
 <p>正在打开看板…</p>
 <p><a href="$target">如果没有自动跳转，点这里</a></p>
@@ -589,27 +601,27 @@ a{color:#58a6ff}small{color:#8b949e}</style></head>
 
 HUB_CSS = """
 /* ---------- 门厅 index.html：入口页，不是跳转壳 ---------- */
-.bar{position:sticky;top:0;z-index:60;padding:7px 0;background:#0e1116e6;
+.bar{position:sticky;top:0;z-index:60;padding:7px 0;background:color-mix(in oklch, var(--paper) 90%, transparent);
   backdrop-filter:blur(14px) saturate(1.25);border-bottom:1px solid var(--line)}
 .bar-in{max-width:1046px;margin:0 auto;height:44px;display:flex;align-items:center;gap:9px;padding:0 25px}
 .brand{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;letter-spacing:.01em;
   white-space:nowrap;color:var(--ink);text-decoration:none}
-.brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);outline:1px solid #58a6ff59;outline-offset:2px}
+.brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);outline:1px solid var(--line-strong);outline-offset:2px}
 .bar .sp{flex:1}
-.btn{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:9px 14px;border:1px solid #2b3644;
-  border-radius:9px;background:#161b22;color:#c9d5e1;font:500 13.2px/1 inherit;text-decoration:none;
+.btn{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:9px 14px;border:1px solid var(--line-strong);
+  border-radius:9px;background:var(--card);color:var(--ink-2);font:500 13.2px/1 inherit;text-decoration:none;
   white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
-.btn:hover{background:#1c2430;border-color:#3d4a5c;color:#fff}
+.btn:hover{background:var(--paper-2);border-color:var(--line-strong);color:var(--ink)}
 .btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .hwrap{max-width:1046px;margin:0 auto;padding:0 25px 84px}
 .hhead{padding:54px 0 30px;border-bottom:1px solid var(--line)}
 .hdat{margin:0 0 20px;font:500 12.8px/1.6 var(--mono);color:var(--dim);
   letter-spacing:.02em;font-variant-numeric:tabular-nums}
-.hdat b{color:#c9d5e1;font-weight:600}
-.hdat .div{padding:0 .55em;color:#39434f}
+.hdat b{color:var(--ink-2);font-weight:600}
+.hdat .div{padding:0 .55em;color:var(--dim)}
 h1.h1{margin:0 0 14px;font-size:clamp(27px,4.2vw,44px);line-height:1.16;letter-spacing:-.028em;
   font-weight:600;text-wrap:balance}
-h1.h1 .sep{color:#39434f;font-weight:400;padding:0 .1em}
+h1.h1 .sep{color:var(--dim);font-weight:400;padding:0 .1em}
 h1.h1 .cl{display:inline-block}
 h1.h1 .pt{color:var(--down);font-variant-numeric:tabular-nums}
 h1.h1 .pt.up{color:var(--up)}
@@ -618,9 +630,9 @@ h1.h1 .u{font-style:normal;font-size:.42em;font-weight:500;color:var(--dim);marg
 .hsub{margin:0;max-width:60ch;color:var(--dim);font-size:14.6px;line-height:1.72}
 .hact{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:26px}
 .go{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 19px;border-radius:11px;
-  background:#123050;border:1px solid #1f6feb7a;color:#cfe6ff;font:600 14px/1 inherit;text-decoration:none;
+  background:var(--guide-bg);border:1px solid var(--brand-f);color:var(--brand);font:600 14px/1 inherit;text-decoration:none;
   transition:background .16s,border-color .16s,color .16s}
-.go:hover{background:#173d63;border-color:#58a6ffaa;color:#fff}
+.go:hover{background:var(--guide-bg);border-color:var(--brand-f);color:var(--ink)}
 .go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round;transition:transform .18s cubic-bezier(.22,1,.36,1)}
 .go:hover svg{transform:translateX(3px)}
@@ -628,7 +640,7 @@ h1.h1 .u{font-style:normal;font-size:.42em;font-weight:500;color:var(--dim);marg
 .read>div{padding:19px 20px 21px 0}
 .read>div+div{padding-left:20px;border-left:1px solid var(--line)}
 .read dt{font:600 12.4px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
-.read dd{margin:10px 0 0;font:600 24px/1.1 var(--mono);color:#e6edf3;
+.read dd{margin:10px 0 0;font:600 24px/1.1 var(--mono);color:var(--ink);
   letter-spacing:-.02em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
 .read dd i{display:block;margin-top:6px;font:500 12.6px/1.45 var(--mono);font-style:normal;
   letter-spacing:.03em;color:var(--dim)}
@@ -636,28 +648,28 @@ h1.h1 .u{font-style:normal;font-size:.42em;font-weight:500;color:var(--dim);marg
 .read dd.down{color:var(--down)}
 .hsec{padding-top:46px}
 .hsec h2{margin:0 0 15px;font-size:18px;font-weight:600;letter-spacing:-.005em;
-  display:flex;align-items:baseline;justify-content:space-between;gap:14px;color:#e6edf3}
+  display:flex;align-items:baseline;justify-content:space-between;gap:14px;color:var(--ink)}
 .hsec h2 a{font:500 12.8px/1 var(--mono);color:var(--accent);text-decoration:none;
-  border-bottom:1px solid #58a6ff44;letter-spacing:0}
-.hsec h2 a:hover{color:#a5ceff}
+  border-bottom:1px solid var(--line);letter-spacing:0}
+.hsec h2 a:hover{color:var(--brand)}
 .recent{list-style:none;margin:0;padding:0}
 .recent li{border-bottom:1px solid var(--line)}
 .recent li+li{border-top:1px solid var(--line)}
 .recent a{display:grid;grid-template-columns:92px minmax(0,1fr) 84px 20px;align-items:center;gap:14px;
   padding:13px 4px 13px 0;text-decoration:none;color:inherit;transition:background .14s}
-.recent a:hover{background:#161b22}
-.recent .d{font:500 13.4px/1 var(--mono);color:#c9d5e1;font-variant-numeric:tabular-nums}
+.recent a:hover{background:var(--card)}
+.recent .d{font:500 13.4px/1 var(--mono);color:var(--ink-2);font-variant-numeric:tabular-nums}
 .recent .m{font-size:14px;font-weight:600;display:flex;align-items:baseline;gap:8px;min-width:0}
 .recent .m small{font:500 12.6px/1 var(--mono);color:var(--dim);font-weight:500;white-space:nowrap}
 .recent .v{font:600 13.6px/1 var(--mono);text-align:right;font-variant-numeric:tabular-nums}
-.recent .arw{color:#39434f;text-align:right;font:400 15px/1 var(--mono);transition:color .14s,transform .14s}
+.recent .arw{color:var(--dim);text-align:right;font:400 15px/1 var(--mono);transition:color .14s,transform .14s}
 .recent a:hover .arw{color:var(--accent);transform:translateX(3px)}
 /* 名单来历：数据全从 data/gs50.csv 数出来，别在文案里写死家数 */
 .why{margin:2px 0 0;max-width:84ch}
 .why>div{display:grid;grid-template-columns:104px minmax(0,1fr);gap:16px;padding:7px 0;align-items:baseline}
 .why dt{font:600 12.2px/1.65 var(--mono);letter-spacing:.08em;color:var(--dim);white-space:nowrap}
-.why dd{margin:0;font-size:14.3px;line-height:1.74;color:#c9d5e1;min-width:0;text-wrap:pretty}
-.why dd b{color:#fff;font-weight:600}
+.why dd{margin:0;font-size:14.3px;line-height:1.74;color:var(--ink-2);min-width:0;text-wrap:pretty}
+.why dd b{color:var(--ink);font-weight:600}
 .why + .hsub{margin-top:12px;max-width:84ch;font-size:13.6px;line-height:1.7}
 html{scroll-behavior:smooth}
 .chart{animation:hubin .6s cubic-bezier(.22,1,.36,1) both}
@@ -696,15 +708,20 @@ html{scroll-behavior:smooth}
 """
 
 
+def mixa(c, a):
+    """令牌色 + alpha：CSS 里 hex 不能直接拼 alpha（var() 更不行），改用 color-mix"""
+    return f"color-mix(in oklch, {c} {round(a * 100)}%, transparent)"
+
+
 def gs_facts():
     """从 data/gs50.csv 数出名单构成（总数 / A / HK / 六层家数）。
     门厅上的“54 家”全从这儿取，名单变了页面自己跟上，不会和文案对不上。"""
-    layers = [("Semiconductors", "半导体", "#58a6ff"),
-              ("Infrastructure", "基础设施", "#39c5cf"),
-              ("Application (Physical)", "应用·物理", "#bc8cff"),
-              ("Power", "电力", "#d29922"),
-              ("Application (AI+)", "应用·AI+", "#f778ba"),
-              ("AI Model", "模型", "#a5d6ff")]
+    layers = [("Semiconductors", "半导体", "var(--series-4)"),
+              ("Infrastructure", "基础设施", "var(--series-3)"),
+              ("Application (Physical)", "应用·物理", "var(--series-5)"),
+              ("Power", "电力", "var(--guide)"),
+              ("Application (AI+)", "应用·AI+", "var(--plum-f)"),
+              ("AI Model", "模型", "var(--ind-f)")]
     try:
         with open(os.path.join(ROOT, "data", "gs50.csv"), encoding="utf-8-sig", newline="") as f:
             rows = list(csv.DictReader(f))
@@ -760,7 +777,7 @@ def hub(rows, last):
     def row(r):
         s, m = r.get("score"), r.get("median")
         e = r.get("excess")
-        s_col = DOWN if ok(s) and s < 45 else ("#d29922" if not ok(s) or s < 62 else UP)
+        s_col = DOWN if ok(s) and s < 45 else ("var(--guide)" if not ok(s) or s < 62 else UP)
         return (f"<li><a href='{r['day']}.html'>"
                 f"<span class='d'>{dlabel(r['day'])[5:]}</span>"
                 f"<span class='m'>{esc(r.get('mood') or '—')}"
@@ -776,13 +793,15 @@ def hub(rows, last):
 
     html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>AI 主题每日复盘 · 首页（最新 {dlabel(day)}）</title>
-<style>{CSS}{HUB_CSS}</style></head><body>
+<style>{THEME_CSS}</style><style>{CSS}{HUB_CSS}</style><script>{THEME_JS}</script></head><body>
 <div class="bar"><div class="bar-in">
 <a class="brand" href="index.html"><span class="dot"></span>AI 主题复盘</a>
 <span class="sp"></span>
 <a class="btn" href="archive.html" title="全部 {n} 期历史归档 · 温度与中位的逐日总览"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg>历史总览</a>
 <a class="btn" href="manual.html" title="数据从哪来、谁在用哪个接口、哪些拿不到"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v1m0 3v6"/></svg>项目说明</a>
+{THEME_BTN}
 </div></div>
 <div class="hwrap">
 <header class="hhead">

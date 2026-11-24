@@ -50,9 +50,9 @@ ALIAS_TPL = """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <title>AI 主题每日复盘 · 首页</title>
 <meta http-equiv="refresh" content="0; url=index.html">
 <link rel="canonical" href="index.html">
-<style>body{{margin:0;background:#0e1116;color:#e6edf3;
+<style>body{{margin:0;background:#17130e;color:#ece6da;
 font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}}
-.wrap{{max-width:640px;margin:18vh auto;padding:0 26px}}a{{color:#58a6ff}}</style>
+.wrap{{max-width:640px;margin:18vh auto;padding:0 26px}}a{{color:#bd8f4e}}</style>
 <script>location.replace("index.html");</script></head>
 <body><div class="wrap"><p><code>gs50_dashboard.html</code> 已并入首页——入口只有 <code>index.html</code> 一个。</p>
 <p>没跳转的话点这里：<a href="index.html">首页</a>　·　<a href="{day}.html">数据日 {day}</a></p></div></body></html>

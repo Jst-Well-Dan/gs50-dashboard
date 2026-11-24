@@ -1,0 +1,300 @@
+/* =============================================================================
+   Dan's Investment Dashboard · 看板主题（同步产物，勿手改）
+   -----------------------------------------------------------------------------
+   由 Dan's Investment Dashboard / scripts/sync_board_theme.py 生成：
+     theme/tokens.css（去掉 @font-face）+ theme/board-skin.css
+   要改色板 / 字体 / 涨跌语义，去改站点仓库的那两个文件，然后重跑同步脚本。
+   ========================================================================== */
+/* =============================================================================
+   Dan's Investment Dashboard · 统一主题
+   -----------------------------------------------------------------------------
+   形态：印刷纸本 + 黑金（浅色模式取「中」档：顶栏与页脚为暖黑带）
+   用法：站点页面引 assets/tokens.css（theme.css 已 @import 它）；
+        独立看板内联的合并副本叫 theme.css。
+        深色：<html data-theme="dark"> 或系统偏好自动切换
+
+   规则（首页、档案页、判断页、分组页、主题页共用一套色板）
+     1) 色板在 OKLCH 里生成：固定明度与彩度，只转色相，所以每个颜色一样重。
+     2) 用途 → 色板值只有一层映射（见「用途映射」），页面不写死色值。
+     3) 数据区（KPI/表格/图表）里，蜜金只表示指引 / 预期；链接与强调用墨色。
+     4) 结论不占行情色：涨跌色只落在数字上，结论用形状区分。
+     5) 页面加载时没有任何动画；动效只由用户操作触发。
+     6) 首页工作台使用细边框面板组织行情、复核队列与研究预览；内页保留账本式阅读。
+     7) 数字：等宽 + tabular-nums。
+   ========================================================================== */
+
+/* ------------------------------------------------------ 自托管字体（无 CDN）
+   Newsreader：只覆盖拉丁与数字，中文自动回退到系统黑体 */
+/* ------------------------------------------------------ 色板 · 浅色
+   文字档 L .50 C .095   色块档 L .68 C .10
+   色相：朱 28 / 赭 50 / 蜜 74 / 石绿 158 / 青 204 / 靛 250 / 梅 318 */
+:root {
+  color-scheme: light;
+
+  --honey-t: #835a18;  --honey-f: #bd8f4e;
+  --cin-t:   #924c44;  --cin-f:   #cf8075;
+  --jade-t:  #29734e;  --jade-f:  #5eab81;
+  --ind-t:   #356697;  --ind-f:   #679dd4;
+  --plum-t:  #7a5186;  --plum-f:  #b284c0;
+  /* 后补两色：只为多系列图表。朱与石绿被涨跌占用，系列只能从剩下三个之外取。 */
+  --qing-t:  #007378;  --qing-f:  #38abb1;
+  --ochre-t: #8e522e;  --ochre-f: #ca865f;
+
+  /* 纸与墨：墨是蜜色相的极低彩度暖黑，和金色放在一起不发青 */
+  --paper:        #f7f5f0;
+  --paper-2:      #efebe2;
+  --card:         #fffdf8;
+  --card-2:       #faf6ec;
+
+  --ink:          #1c1712;
+  --ink-2:        #4a433a;
+  --muted:        #6f685c;
+  --dim:          #726c63;   /* 4.8:1 起，原来 #a39b8e 只有 2.7 */
+
+  --line:         #e4ddcf;
+  --line-soft:    #ece6da;
+  --line-strong:  #cfc3ab;
+
+  /* 黑金带：顶栏、页脚（浅色模式「中」档） */
+  --band:         #17130e;
+  --band-ink:     #ece6da;
+  --band-muted:   #a39b8e;
+  --band-line:    color-mix(in oklch, #bd8f4e 55%, #17130e);
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+               "Liberation Mono", monospace;
+  /* 只用于大数字与报表味道的地方，不用于中文 */
+  --font-serif: "Newsreader", Cambria, "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+
+  /* 字号阶梯 */
+  --fs-2xs: 11.5px;   /* 只给数字单位、图表轴标签这类极短文本 */
+  --fs-xs:  12.5px;
+  --fs-sm:  13.5px;
+  --fs-md:  15px;
+  --fs-lg:  17px;
+  --fs-xl:  21px;
+  --fs-2xl: 27px;
+  --fs-3xl: 34px;
+
+  /* 间距阶梯 */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  /* 形状：标签与控件用小圆角；首页工作台面板使用 --r-lg，内页表格与判断行仍靠墨线分栏。 */
+  --r-sm: 4px;  --r-md: 7px;  --r-lg: 12px;
+
+  /* 版心 */
+  --wrap: 1180px;
+  --topbar-h: 44px;
+
+  /* 浏览器自绘部分也归这套色 */
+  --sel-bg: color-mix(in oklch, var(--honey-f) 32%, var(--card));
+}
+
+/* ------------------------------------------------------ 色板 · 深色
+   文字档 L .77 C .09   色块档 L .62 C .09（彩度不升，所以不发光） */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --honey-t: #d7ac72;  --honey-f: #a77e45;
+  --cin-t:   #e89e94;  --cin-f:   #b67168;
+  --jade-t:  #82c69e;  --jade-f:  #539771;
+  --ind-t:   #88b9ec;  --ind-f:   #5b8abb;
+  --plum-t:  #cda2da;  --plum-f:  #9d75a9;
+  --qing-t:  #67c6cb;  --qing-f:  #33969b;
+  --ochre-t: #e3a480;  --ochre-f: #b27654;
+
+  --paper:        #130f0a;
+  --paper-2:      #17130e;
+  --card:         #1c1712;
+  --card-2:       #211c17;
+
+  --ink:          #efe6d4;
+  --ink-2:        #cfc4b0;
+  --muted:        #9a9285;
+  --dim:          #8f8678;   /* 4.8:1 起（落在 #211c17 浅面板上也过 4.5:1） */
+
+  /* 深色：分隔线里混一点金，所以是暗金光而不是灰线 */
+  --line:         color-mix(in oklch, #bd8f4e 22%, #1c1712);
+  --line-soft:    color-mix(in oklch, #bd8f4e 12%, #1c1712);
+  --line-strong:  color-mix(in oklch, #bd8f4e 36%, #1c1712);
+
+  --band:         #0d0a07;
+  --band-ink:     #efe6d4;
+  --band-muted:   #a39b8e;
+  --band-line:    color-mix(in oklch, #d7ac72 45%, #0d0a07);
+
+  --sel-bg: color-mix(in oklch, var(--honey-f) 38%, #1c1712);
+}
+
+/* 跟随系统（未手动指定时） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --honey-t: #d7ac72;  --honey-f: #a77e45;
+    --cin-t:   #e89e94;  --cin-f:   #b67168;
+    --jade-t:  #82c69e;  --jade-f:  #539771;
+    --ind-t:   #88b9ec;  --ind-f:  #5b8abb;
+    --plum-t:  #cda2da;  --plum-f:  #9d75a9;
+    --qing-t:  #67c6cb;  --qing-f:  #33969b;
+    --ochre-t: #e3a480;  --ochre-f: #b27654;
+
+    --paper: #130f0a; --paper-2: #17130e; --card: #1c1712; --card-2: #211c17;
+    --ink: #efe6d4; --ink-2: #cfc4b0; --muted: #9a9285; --dim: #8f8678;
+    --line: color-mix(in oklch, #bd8f4e 22%, #1c1712);
+    --line-soft: color-mix(in oklch, #bd8f4e 12%, #1c1712);
+    --line-strong: color-mix(in oklch, #bd8f4e 36%, #1c1712);
+    --band: #0d0a07; --band-ink: #efe6d4; --band-muted: #a39b8e;
+    --band-line: color-mix(in oklch, #d7ac72 45%, #0d0a07);
+    --sel-bg: color-mix(in oklch, var(--honey-f) 38%, #1c1712);
+  }
+}
+
+/* ------------------------------------------------------ 用途映射（唯一一层） */
+:root {
+  /* 品牌 / 指引 = 蜜。数据区里金色只表示指引，见规则 3 */
+  --brand:       var(--honey-t);
+  --brand-f:     var(--honey-f);
+  --guide:       var(--honey-t);
+  --guide-f:     var(--honey-f);
+
+  --actual:      var(--ind-t);
+  --actual-f:    var(--ind-f);
+
+  --up:          var(--cin-t);      /* 涨 · 风险 · 已到期 */
+  --down:        var(--jade-t);     /* 跌 */
+  --flat:        var(--muted);
+  --series-3:    var(--plum-t);     /* 图表第三系列 */
+  --series-3-f:  var(--plum-f);
+  --series-4:    var(--qing-t);     /* 第四系列：青 */
+  --series-4-f:  var(--qing-f);
+  --series-5:    var(--ochre-t);    /* 第五系列：赭 */
+  --series-5-f:  var(--ochre-f);
+
+  /* 浅底：在 OKLCH 里朝卡片混，不会像 rgba 叠暖底那样发灰 */
+  --warn-bg:     color-mix(in oklch, var(--cin-f) 9%, var(--card));
+
+  /* 旧令牌名保留，供已有页面使用 */
+  --accent:      var(--brand);
+  --accent-ink:  var(--brand);
+  --accent-line: color-mix(in oklch, var(--honey-f) 52%, var(--card));
+
+  /* 判断状态：不占色板 */
+  --st-track:    var(--ink-2);
+  --st-hold:     var(--ink);
+  --st-doubt:    var(--muted);
+  --st-dead:     var(--dim);
+  --st-due:      var(--up);
+}
+
+/* =============================================================================
+   Dan's Investment Dashboard · 看板皮肤层（独立仓库用）
+   -----------------------------------------------------------------------------
+   给「独立部署的看板」（黄金 / GS50 / 五年看板）用的那一层，不含版式：
+     1) 把看板自己的历史变量名（--bg / --panel / --ink / --accent …）别名到主题令牌
+     2) 页面基底：纸底、墨字、字体栈、选择色、滚动条、焦点圈
+     3) 涨跌语义与系列色：正=朱 --up，负=石绿 --down（A 股红涨绿跌）
+     4) 明暗开关按钮 .theme-toggle
+
+   用法：由 scripts/sync_board_theme.py 把 tokens.css（去掉 @font-face）+ 本文件
+   合成 theme.css，内联进各看板的 <style> **最前面**；看板自己的 CSS 跟在后面，
+   只引 var(--…)，不再写死色值。
+   ========================================================================== */
+
+/* ------------------------------------------------------ 1. 历史变量名别名
+   两个看板原来各有一套深色变量名（--bg / --panel / --line / --ink / --dim /
+   --accent …），这里接一次，样式表逐行改名的成本就省掉了；改色只改 tokens.css。 */
+:root {
+  --bg:        var(--paper);
+  --panel:     var(--card);
+  --panel-2:   var(--card-2);
+  --ink3:      var(--dim);
+  --line2:     var(--line-soft);
+  --part:      var(--guide);        /* 部分 / 中性档：蜜 */
+  --warn:      var(--guide);
+  --accent:    var(--actual);       /* 主走势线与强调：靛（历史实际值） */
+  --accent2:   var(--series-3);     /* 第二强调：梅 */
+  --ok:        var(--down);
+  --bad:       var(--up);
+  /* 数据状态四态（五年看板的 status.css 用这套名字）：
+     成功=石绿、跳过=靖（中性信息）、降级=蜜（警告）、失败=朱 */
+  --skip:      var(--actual);
+  --stale:     var(--guide);
+  --fail:      var(--up);
+  --gray:      var(--dim);
+
+  /* 黄金看板的历史名字 */
+  --gold:        var(--brand);
+  --gold-bright: var(--brand-f);
+  --gold-soft:   color-mix(in oklch, var(--honey-f) 34%, var(--card));
+  --gold-glow:   color-mix(in oklch, var(--honey-f) 22%, var(--card));
+  --radius:      var(--r-lg);
+  --sans:        var(--font-sans);
+  --mono:        var(--font-mono);
+  --shadow:      none;
+
+  /* 浅底配方：替代 rgba()，换肤时不会发灰 */
+  --up-bg:     color-mix(in oklch, var(--cin-f) 10%, var(--card));
+  --down-bg:   color-mix(in oklch, var(--jade-f) 12%, var(--card));
+  --guide-bg:  color-mix(in oklch, var(--honey-f) 14%, var(--card));
+  --sunken:    var(--paper-2);
+}
+
+/* ------------------------------------------------------ 2. 页面基底
+   看板自己的 CSS 会写 body / html 的字体与背景，这里只在它们没写全时兜底，
+   并且保证明暗切换时底色跟着变（tokens.css 已经切过 --paper）。 */
+html { background: var(--paper); color-scheme: light; }
+:root[data-theme="dark"], :root[data-theme="dark"] html { color-scheme: dark; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--sel-bg); color: var(--ink); }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--r-sm); }
+
+* { scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px;
+                            border: 3px solid var(--paper); }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+code, kbd, pre, samp { font-family: var(--font-mono); }
+
+/* ------------------------------------------------------ 3. 涨跌与系列
+   类名双写拿特异度 (0,2,0)，压过各看板自己的 `table td{color:…}` 基底规则。 */
+.up.up, .pos.pos                     { color: var(--up); }
+.down.down, .neg.neg                 { color: var(--down); }
+.flat.flat, .neu.neu                 { color: var(--flat); }
+.guide.guide                         { color: var(--guide); }
+.actual.actual                       { color: var(--actual); }
+
+/* ------------------------------------------------------ 5. 明暗开关
+   各看板顶栏右侧放一个 .theme-toggle；样式与站点 #theme-btn 同形（黑金带上的细框）。 */
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 500 var(--fs-xs)/1 var(--font-sans);
+  padding: 5px 10px; min-height: 28px;
+  color: var(--brand); background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer; white-space: nowrap;
+  transition: color 160ms var(--ease-out), border-color 160ms var(--ease-out),
+              background 160ms var(--ease-out);
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--brand-f); background: var(--card); }
+.theme-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media print { .theme-toggle { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

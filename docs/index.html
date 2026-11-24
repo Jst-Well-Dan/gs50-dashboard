@@ -1,15 +1,313 @@
 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>AI 主题每日复盘 · 首页（最新 2026-11-24）</title>
-<style>
-:root{--bg:#0e1116;--panel:#161b22;--line:#232b36;--ink:#e6edf3;--dim:#8b949e;
---up:#f85149;--down:#3fb950;--accent:#58a6ff;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+<style>/* =============================================================================
+   Dan's Investment Dashboard · 看板主题（同步产物，勿手改）
+   -----------------------------------------------------------------------------
+   由 Dan's Investment Dashboard / scripts/sync_board_theme.py 生成：
+     theme/tokens.css（去掉 @font-face）+ theme/board-skin.css
+   要改色板 / 字体 / 涨跌语义，去改站点仓库的那两个文件，然后重跑同步脚本。
+   ========================================================================== */
+/* =============================================================================
+   Dan's Investment Dashboard · 统一主题
+   -----------------------------------------------------------------------------
+   形态：印刷纸本 + 黑金（浅色模式取「中」档：顶栏与页脚为暖黑带）
+   用法：站点页面引 assets/tokens.css（theme.css 已 @import 它）；
+        独立看板内联的合并副本叫 theme.css。
+        深色：<html data-theme="dark"> 或系统偏好自动切换
+
+   规则（首页、档案页、判断页、分组页、主题页共用一套色板）
+     1) 色板在 OKLCH 里生成：固定明度与彩度，只转色相，所以每个颜色一样重。
+     2) 用途 → 色板值只有一层映射（见「用途映射」），页面不写死色值。
+     3) 数据区（KPI/表格/图表）里，蜜金只表示指引 / 预期；链接与强调用墨色。
+     4) 结论不占行情色：涨跌色只落在数字上，结论用形状区分。
+     5) 页面加载时没有任何动画；动效只由用户操作触发。
+     6) 首页工作台使用细边框面板组织行情、复核队列与研究预览；内页保留账本式阅读。
+     7) 数字：等宽 + tabular-nums。
+   ========================================================================== */
+
+/* ------------------------------------------------------ 自托管字体（无 CDN）
+   Newsreader：只覆盖拉丁与数字，中文自动回退到系统黑体 */
+/* ------------------------------------------------------ 色板 · 浅色
+   文字档 L .50 C .095   色块档 L .68 C .10
+   色相：朱 28 / 赭 50 / 蜜 74 / 石绿 158 / 青 204 / 靛 250 / 梅 318 */
+:root {
+  color-scheme: light;
+
+  --honey-t: #835a18;  --honey-f: #bd8f4e;
+  --cin-t:   #924c44;  --cin-f:   #cf8075;
+  --jade-t:  #29734e;  --jade-f:  #5eab81;
+  --ind-t:   #356697;  --ind-f:   #679dd4;
+  --plum-t:  #7a5186;  --plum-f:  #b284c0;
+  /* 后补两色：只为多系列图表。朱与石绿被涨跌占用，系列只能从剩下三个之外取。 */
+  --qing-t:  #007378;  --qing-f:  #38abb1;
+  --ochre-t: #8e522e;  --ochre-f: #ca865f;
+
+  /* 纸与墨：墨是蜜色相的极低彩度暖黑，和金色放在一起不发青 */
+  --paper:        #f7f5f0;
+  --paper-2:      #efebe2;
+  --card:         #fffdf8;
+  --card-2:       #faf6ec;
+
+  --ink:          #1c1712;
+  --ink-2:        #4a433a;
+  --muted:        #6f685c;
+  --dim:          #726c63;   /* 4.8:1 起，原来 #a39b8e 只有 2.7 */
+
+  --line:         #e4ddcf;
+  --line-soft:    #ece6da;
+  --line-strong:  #cfc3ab;
+
+  /* 黑金带：顶栏、页脚（浅色模式「中」档） */
+  --band:         #17130e;
+  --band-ink:     #ece6da;
+  --band-muted:   #a39b8e;
+  --band-line:    color-mix(in oklch, #bd8f4e 55%, #17130e);
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+               "Liberation Mono", monospace;
+  /* 只用于大数字与报表味道的地方，不用于中文 */
+  --font-serif: "Newsreader", Cambria, "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+
+  /* 字号阶梯 */
+  --fs-2xs: 11.5px;   /* 只给数字单位、图表轴标签这类极短文本 */
+  --fs-xs:  12.5px;
+  --fs-sm:  13.5px;
+  --fs-md:  15px;
+  --fs-lg:  17px;
+  --fs-xl:  21px;
+  --fs-2xl: 27px;
+  --fs-3xl: 34px;
+
+  /* 间距阶梯 */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  /* 形状：标签与控件用小圆角；首页工作台面板使用 --r-lg，内页表格与判断行仍靠墨线分栏。 */
+  --r-sm: 4px;  --r-md: 7px;  --r-lg: 12px;
+
+  /* 版心 */
+  --wrap: 1180px;
+  --topbar-h: 44px;
+
+  /* 浏览器自绘部分也归这套色 */
+  --sel-bg: color-mix(in oklch, var(--honey-f) 32%, var(--card));
+}
+
+/* ------------------------------------------------------ 色板 · 深色
+   文字档 L .77 C .09   色块档 L .62 C .09（彩度不升，所以不发光） */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --honey-t: #d7ac72;  --honey-f: #a77e45;
+  --cin-t:   #e89e94;  --cin-f:   #b67168;
+  --jade-t:  #82c69e;  --jade-f:  #539771;
+  --ind-t:   #88b9ec;  --ind-f:   #5b8abb;
+  --plum-t:  #cda2da;  --plum-f:  #9d75a9;
+  --qing-t:  #67c6cb;  --qing-f:  #33969b;
+  --ochre-t: #e3a480;  --ochre-f: #b27654;
+
+  --paper:        #130f0a;
+  --paper-2:      #17130e;
+  --card:         #1c1712;
+  --card-2:       #211c17;
+
+  --ink:          #efe6d4;
+  --ink-2:        #cfc4b0;
+  --muted:        #9a9285;
+  --dim:          #8f8678;   /* 4.8:1 起（落在 #211c17 浅面板上也过 4.5:1） */
+
+  /* 深色：分隔线里混一点金，所以是暗金光而不是灰线 */
+  --line:         color-mix(in oklch, #bd8f4e 22%, #1c1712);
+  --line-soft:    color-mix(in oklch, #bd8f4e 12%, #1c1712);
+  --line-strong:  color-mix(in oklch, #bd8f4e 36%, #1c1712);
+
+  --band:         #0d0a07;
+  --band-ink:     #efe6d4;
+  --band-muted:   #a39b8e;
+  --band-line:    color-mix(in oklch, #d7ac72 45%, #0d0a07);
+
+  --sel-bg: color-mix(in oklch, var(--honey-f) 38%, #1c1712);
+}
+
+/* 跟随系统（未手动指定时） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --honey-t: #d7ac72;  --honey-f: #a77e45;
+    --cin-t:   #e89e94;  --cin-f:   #b67168;
+    --jade-t:  #82c69e;  --jade-f:  #539771;
+    --ind-t:   #88b9ec;  --ind-f:  #5b8abb;
+    --plum-t:  #cda2da;  --plum-f:  #9d75a9;
+    --qing-t:  #67c6cb;  --qing-f:  #33969b;
+    --ochre-t: #e3a480;  --ochre-f: #b27654;
+
+    --paper: #130f0a; --paper-2: #17130e; --card: #1c1712; --card-2: #211c17;
+    --ink: #efe6d4; --ink-2: #cfc4b0; --muted: #9a9285; --dim: #8f8678;
+    --line: color-mix(in oklch, #bd8f4e 22%, #1c1712);
+    --line-soft: color-mix(in oklch, #bd8f4e 12%, #1c1712);
+    --line-strong: color-mix(in oklch, #bd8f4e 36%, #1c1712);
+    --band: #0d0a07; --band-ink: #efe6d4; --band-muted: #a39b8e;
+    --band-line: color-mix(in oklch, #d7ac72 45%, #0d0a07);
+    --sel-bg: color-mix(in oklch, var(--honey-f) 38%, #1c1712);
+  }
+}
+
+/* ------------------------------------------------------ 用途映射（唯一一层） */
+:root {
+  /* 品牌 / 指引 = 蜜。数据区里金色只表示指引，见规则 3 */
+  --brand:       var(--honey-t);
+  --brand-f:     var(--honey-f);
+  --guide:       var(--honey-t);
+  --guide-f:     var(--honey-f);
+
+  --actual:      var(--ind-t);
+  --actual-f:    var(--ind-f);
+
+  --up:          var(--cin-t);      /* 涨 · 风险 · 已到期 */
+  --down:        var(--jade-t);     /* 跌 */
+  --flat:        var(--muted);
+  --series-3:    var(--plum-t);     /* 图表第三系列 */
+  --series-3-f:  var(--plum-f);
+  --series-4:    var(--qing-t);     /* 第四系列：青 */
+  --series-4-f:  var(--qing-f);
+  --series-5:    var(--ochre-t);    /* 第五系列：赭 */
+  --series-5-f:  var(--ochre-f);
+
+  /* 浅底：在 OKLCH 里朝卡片混，不会像 rgba 叠暖底那样发灰 */
+  --warn-bg:     color-mix(in oklch, var(--cin-f) 9%, var(--card));
+
+  /* 旧令牌名保留，供已有页面使用 */
+  --accent:      var(--brand);
+  --accent-ink:  var(--brand);
+  --accent-line: color-mix(in oklch, var(--honey-f) 52%, var(--card));
+
+  /* 判断状态：不占色板 */
+  --st-track:    var(--ink-2);
+  --st-hold:     var(--ink);
+  --st-doubt:    var(--muted);
+  --st-dead:     var(--dim);
+  --st-due:      var(--up);
+}
+
+/* =============================================================================
+   Dan's Investment Dashboard · 看板皮肤层（独立仓库用）
+   -----------------------------------------------------------------------------
+   给「独立部署的看板」（黄金 / GS50 / 五年看板）用的那一层，不含版式：
+     1) 把看板自己的历史变量名（--bg / --panel / --ink / --accent …）别名到主题令牌
+     2) 页面基底：纸底、墨字、字体栈、选择色、滚动条、焦点圈
+     3) 涨跌语义与系列色：正=朱 --up，负=石绿 --down（A 股红涨绿跌）
+     4) 明暗开关按钮 .theme-toggle
+
+   用法：由 scripts/sync_board_theme.py 把 tokens.css（去掉 @font-face）+ 本文件
+   合成 theme.css，内联进各看板的 <style> **最前面**；看板自己的 CSS 跟在后面，
+   只引 var(--…)，不再写死色值。
+   ========================================================================== */
+
+/* ------------------------------------------------------ 1. 历史变量名别名
+   两个看板原来各有一套深色变量名（--bg / --panel / --line / --ink / --dim /
+   --accent …），这里接一次，样式表逐行改名的成本就省掉了；改色只改 tokens.css。 */
+:root {
+  --bg:        var(--paper);
+  --panel:     var(--card);
+  --panel-2:   var(--card-2);
+  --ink3:      var(--dim);
+  --line2:     var(--line-soft);
+  --part:      var(--guide);        /* 部分 / 中性档：蜜 */
+  --warn:      var(--guide);
+  --accent:    var(--actual);       /* 主走势线与强调：靛（历史实际值） */
+  --accent2:   var(--series-3);     /* 第二强调：梅 */
+  --ok:        var(--down);
+  --bad:       var(--up);
+  /* 数据状态四态（五年看板的 status.css 用这套名字）：
+     成功=石绿、跳过=靖（中性信息）、降级=蜜（警告）、失败=朱 */
+  --skip:      var(--actual);
+  --stale:     var(--guide);
+  --fail:      var(--up);
+  --gray:      var(--dim);
+
+  /* 黄金看板的历史名字 */
+  --gold:        var(--brand);
+  --gold-bright: var(--brand-f);
+  --gold-soft:   color-mix(in oklch, var(--honey-f) 34%, var(--card));
+  --gold-glow:   color-mix(in oklch, var(--honey-f) 22%, var(--card));
+  --radius:      var(--r-lg);
+  --sans:        var(--font-sans);
+  --mono:        var(--font-mono);
+  --shadow:      none;
+
+  /* 浅底配方：替代 rgba()，换肤时不会发灰 */
+  --up-bg:     color-mix(in oklch, var(--cin-f) 10%, var(--card));
+  --down-bg:   color-mix(in oklch, var(--jade-f) 12%, var(--card));
+  --guide-bg:  color-mix(in oklch, var(--honey-f) 14%, var(--card));
+  --sunken:    var(--paper-2);
+}
+
+/* ------------------------------------------------------ 2. 页面基底
+   看板自己的 CSS 会写 body / html 的字体与背景，这里只在它们没写全时兜底，
+   并且保证明暗切换时底色跟着变（tokens.css 已经切过 --paper）。 */
+html { background: var(--paper); color-scheme: light; }
+:root[data-theme="dark"], :root[data-theme="dark"] html { color-scheme: dark; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--sel-bg); color: var(--ink); }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--r-sm); }
+
+* { scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px;
+                            border: 3px solid var(--paper); }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+code, kbd, pre, samp { font-family: var(--font-mono); }
+
+/* ------------------------------------------------------ 3. 涨跌与系列
+   类名双写拿特异度 (0,2,0)，压过各看板自己的 `table td{color:…}` 基底规则。 */
+.up.up, .pos.pos                     { color: var(--up); }
+.down.down, .neg.neg                 { color: var(--down); }
+.flat.flat, .neu.neu                 { color: var(--flat); }
+.guide.guide                         { color: var(--guide); }
+.actual.actual                       { color: var(--actual); }
+
+/* ------------------------------------------------------ 5. 明暗开关
+   各看板顶栏右侧放一个 .theme-toggle；样式与站点 #theme-btn 同形（黑金带上的细框）。 */
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 500 var(--fs-xs)/1 var(--font-sans);
+  padding: 5px 10px; min-height: 28px;
+  color: var(--brand); background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer; white-space: nowrap;
+  transition: color 160ms var(--ease-out), border-color 160ms var(--ease-out),
+              background 160ms var(--ease-out);
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--brand-f); background: var(--card); }
+.theme-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media print { .theme-toggle { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style><style>
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
 .wrap{max-width:1180px;margin:0 auto;padding:40px 26px 90px}
 .kicker{font:600 12.4px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
-.kicker a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
+.kicker a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--line)}
 h1{font-size:27px;margin:0 0 8px;letter-spacing:-.01em}
 .sub{color:var(--dim);font-size:13.9px;margin:0;max-width:86ch}
 header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:8px}
@@ -26,42 +324,42 @@ h2 .n{font:600 12.4px/1 var(--mono);color:var(--dim);border:1px solid var(--line
 .chart svg text{pointer-events:none}
 table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.4px}
 th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
-thead th{background:#12171e;color:var(--dim);font-size:12.6px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;
+thead th{background:var(--card-2);color:var(--dim);font-size:12.6px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;
   position:sticky;top:0;z-index:4}
-tbody tr:hover{background:#171e28}
+tbody tr:hover{background:var(--paper-2)}
 td a{color:var(--accent);text-decoration:none;font-family:var(--mono)}
-td a:hover{color:#a5ceff;text-decoration:underline}
+td a:hover{color:var(--brand);text-decoration:underline}
 .note{color:var(--dim);font-size:12.8px;margin:9px 0 0}
-.na{color:#4d5866}
+.na{color:var(--dim)}
 /* ---------- 逐日一览：按月折叠 + 月份跳转条 ---------- */
 .months{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 12px}
 .months a{font:500 12.8px/1 var(--mono);padding:8px 12px;border:1px solid var(--line);border-radius:9px;
-  background:#12171e;color:#c9d5e1;text-decoration:none;transition:background .14s,border-color .14s,color .14s}
-.months a:hover{background:#1c2430;border-color:#3d4a5c;color:#fff}
-.months a.on{border-color:#1f6feb88;background:#1f6feb1f;color:#9ccbff}
+  background:var(--card-2);color:var(--ink-2);text-decoration:none;transition:background .14s,border-color .14s,color .14s}
+.months a:hover{background:var(--paper-2);border-color:var(--line-strong);color:var(--ink)}
+.months a.on{border-color:var(--brand-f);background:var(--guide-bg);color:var(--brand)}
 details.mon{border-bottom:1px solid var(--line);scroll-margin-top:12px}
 details.mon>summary{display:flex;align-items:baseline;gap:11px;padding:12px 2px;cursor:pointer;
-  list-style:none;font-size:13.6px;color:#dbe6f0;transition:color .14s}
+  list-style:none;font-size:13.6px;color:var(--ink-2);transition:color .14s}
 details.mon>summary::-webkit-details-marker{display:none}
 details.mon>summary::before{content:'';width:5px;height:5px;flex:none;margin-top:7px;
-  border-right:1.6px solid #6e7681;border-bottom:1.6px solid #6e7681;
+  border-right:1.6px solid var(--dim);border-bottom:1.6px solid var(--dim);
   transform:rotate(-45deg);transition:transform .16s}
 details.mon[open]>summary::before{transform:rotate(45deg)}
-details.mon>summary:hover{color:#fff}
-details.mon>summary .m{font:600 13.4px/1 var(--mono);color:#e6edf3;letter-spacing:-.01em}
+details.mon>summary:hover{color:var(--ink)}
+details.mon>summary .m{font:600 13.4px/1 var(--mono);color:var(--ink);letter-spacing:-.01em}
 details.mon>summary .s{font:500 12.6px/1 var(--mono);color:var(--dim)}
 details.mon[open]>summary{border-bottom:1px solid var(--line)}
 details.mon table{margin:0}
 .scroll{overflow-x:auto}
 .scroll table{min-width:1120px}
-code{font-family:var(--mono);font-size:12.6px;background:#1c2430;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+code{font-family:var(--mono);font-size:12.6px;background:var(--paper-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
 #tip{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .1s;
-background:#1b2230f5;border:1px solid #33414f;border-radius:7px;padding:6px 9px;color:#e6edf3;
-font:12.6px/1.55 inherit;box-shadow:0 6px 14px #00000080;white-space:pre-line;max-width:300px}
+background:color-mix(in oklch, var(--card) 96%, transparent);border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;color:var(--ink);
+font:12.6px/1.55 inherit;box-shadow:0 6px 14px color-mix(in oklch, var(--band) 55%, transparent);white-space:pre-line;max-width:300px}
 [data-tip]{cursor:crosshair}
 [data-tip]:hover{filter:brightness(1.4)}
 footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);color:var(--dim);font-size:12.8px}
-footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid #58a6ff44}
+footer a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--line)}
 footer a.gh{display:inline-flex;align-items:center;border-bottom:none;vertical-align:-3px}
 footer a.gh svg{width:15px;height:15px;fill:currentColor}
 /* 表头吸顶：只有在 .scroll 不自己当滚动容器时才真正贴着窗口（所以就放在 .scroll 之后） */
@@ -73,27 +371,27 @@ footer a.gh svg{width:15px;height:15px;fill:currentColor}
 }
 
 /* ---------- 门厅 index.html：入口页，不是跳转壳 ---------- */
-.bar{position:sticky;top:0;z-index:60;padding:7px 0;background:#0e1116e6;
+.bar{position:sticky;top:0;z-index:60;padding:7px 0;background:color-mix(in oklch, var(--paper) 90%, transparent);
   backdrop-filter:blur(14px) saturate(1.25);border-bottom:1px solid var(--line)}
 .bar-in{max-width:1046px;margin:0 auto;height:44px;display:flex;align-items:center;gap:9px;padding:0 25px}
 .brand{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;letter-spacing:.01em;
   white-space:nowrap;color:var(--ink);text-decoration:none}
-.brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);outline:1px solid #58a6ff59;outline-offset:2px}
+.brand .dot{width:8px;height:8px;border-radius:99px;background:var(--accent);outline:1px solid var(--line-strong);outline-offset:2px}
 .bar .sp{flex:1}
-.btn{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:9px 14px;border:1px solid #2b3644;
-  border-radius:9px;background:#161b22;color:#c9d5e1;font:500 13.2px/1 inherit;text-decoration:none;
+.btn{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:9px 14px;border:1px solid var(--line-strong);
+  border-radius:9px;background:var(--card);color:var(--ink-2);font:500 13.2px/1 inherit;text-decoration:none;
   white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
-.btn:hover{background:#1c2430;border-color:#3d4a5c;color:#fff}
+.btn:hover{background:var(--paper-2);border-color:var(--line-strong);color:var(--ink)}
 .btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .hwrap{max-width:1046px;margin:0 auto;padding:0 25px 84px}
 .hhead{padding:54px 0 30px;border-bottom:1px solid var(--line)}
 .hdat{margin:0 0 20px;font:500 12.8px/1.6 var(--mono);color:var(--dim);
   letter-spacing:.02em;font-variant-numeric:tabular-nums}
-.hdat b{color:#c9d5e1;font-weight:600}
-.hdat .div{padding:0 .55em;color:#39434f}
+.hdat b{color:var(--ink-2);font-weight:600}
+.hdat .div{padding:0 .55em;color:var(--dim)}
 h1.h1{margin:0 0 14px;font-size:clamp(27px,4.2vw,44px);line-height:1.16;letter-spacing:-.028em;
   font-weight:600;text-wrap:balance}
-h1.h1 .sep{color:#39434f;font-weight:400;padding:0 .1em}
+h1.h1 .sep{color:var(--dim);font-weight:400;padding:0 .1em}
 h1.h1 .cl{display:inline-block}
 h1.h1 .pt{color:var(--down);font-variant-numeric:tabular-nums}
 h1.h1 .pt.up{color:var(--up)}
@@ -102,9 +400,9 @@ h1.h1 .u{font-style:normal;font-size:.42em;font-weight:500;color:var(--dim);marg
 .hsub{margin:0;max-width:60ch;color:var(--dim);font-size:14.6px;line-height:1.72}
 .hact{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:26px}
 .go{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 19px;border-radius:11px;
-  background:#123050;border:1px solid #1f6feb7a;color:#cfe6ff;font:600 14px/1 inherit;text-decoration:none;
+  background:var(--guide-bg);border:1px solid var(--brand-f);color:var(--brand);font:600 14px/1 inherit;text-decoration:none;
   transition:background .16s,border-color .16s,color .16s}
-.go:hover{background:#173d63;border-color:#58a6ffaa;color:#fff}
+.go:hover{background:var(--guide-bg);border-color:var(--brand-f);color:var(--ink)}
 .go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round;transition:transform .18s cubic-bezier(.22,1,.36,1)}
 .go:hover svg{transform:translateX(3px)}
@@ -112,7 +410,7 @@ h1.h1 .u{font-style:normal;font-size:.42em;font-weight:500;color:var(--dim);marg
 .read>div{padding:19px 20px 21px 0}
 .read>div+div{padding-left:20px;border-left:1px solid var(--line)}
 .read dt{font:600 12.4px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
-.read dd{margin:10px 0 0;font:600 24px/1.1 var(--mono);color:#e6edf3;
+.read dd{margin:10px 0 0;font:600 24px/1.1 var(--mono);color:var(--ink);
   letter-spacing:-.02em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
 .read dd i{display:block;margin-top:6px;font:500 12.6px/1.45 var(--mono);font-style:normal;
   letter-spacing:.03em;color:var(--dim)}
@@ -120,28 +418,28 @@ h1.h1 .u{font-style:normal;font-size:.42em;font-weight:500;color:var(--dim);marg
 .read dd.down{color:var(--down)}
 .hsec{padding-top:46px}
 .hsec h2{margin:0 0 15px;font-size:18px;font-weight:600;letter-spacing:-.005em;
-  display:flex;align-items:baseline;justify-content:space-between;gap:14px;color:#e6edf3}
+  display:flex;align-items:baseline;justify-content:space-between;gap:14px;color:var(--ink)}
 .hsec h2 a{font:500 12.8px/1 var(--mono);color:var(--accent);text-decoration:none;
-  border-bottom:1px solid #58a6ff44;letter-spacing:0}
-.hsec h2 a:hover{color:#a5ceff}
+  border-bottom:1px solid var(--line);letter-spacing:0}
+.hsec h2 a:hover{color:var(--brand)}
 .recent{list-style:none;margin:0;padding:0}
 .recent li{border-bottom:1px solid var(--line)}
 .recent li+li{border-top:1px solid var(--line)}
 .recent a{display:grid;grid-template-columns:92px minmax(0,1fr) 84px 20px;align-items:center;gap:14px;
   padding:13px 4px 13px 0;text-decoration:none;color:inherit;transition:background .14s}
-.recent a:hover{background:#161b22}
-.recent .d{font:500 13.4px/1 var(--mono);color:#c9d5e1;font-variant-numeric:tabular-nums}
+.recent a:hover{background:var(--card)}
+.recent .d{font:500 13.4px/1 var(--mono);color:var(--ink-2);font-variant-numeric:tabular-nums}
 .recent .m{font-size:14px;font-weight:600;display:flex;align-items:baseline;gap:8px;min-width:0}
 .recent .m small{font:500 12.6px/1 var(--mono);color:var(--dim);font-weight:500;white-space:nowrap}
 .recent .v{font:600 13.6px/1 var(--mono);text-align:right;font-variant-numeric:tabular-nums}
-.recent .arw{color:#39434f;text-align:right;font:400 15px/1 var(--mono);transition:color .14s,transform .14s}
+.recent .arw{color:var(--dim);text-align:right;font:400 15px/1 var(--mono);transition:color .14s,transform .14s}
 .recent a:hover .arw{color:var(--accent);transform:translateX(3px)}
 /* 名单来历：数据全从 data/gs50.csv 数出来，别在文案里写死家数 */
 .why{margin:2px 0 0;max-width:84ch}
 .why>div{display:grid;grid-template-columns:104px minmax(0,1fr);gap:16px;padding:7px 0;align-items:baseline}
 .why dt{font:600 12.2px/1.65 var(--mono);letter-spacing:.08em;color:var(--dim);white-space:nowrap}
-.why dd{margin:0;font-size:14.3px;line-height:1.74;color:#c9d5e1;min-width:0;text-wrap:pretty}
-.why dd b{color:#fff;font-weight:600}
+.why dd{margin:0;font-size:14.3px;line-height:1.74;color:var(--ink-2);min-width:0;text-wrap:pretty}
+.why dd b{color:var(--ink);font-weight:600}
 .why + .hsub{margin-top:12px;max-width:84ch;font-size:13.6px;line-height:1.7}
 html{scroll-behavior:smooth}
 .chart{animation:hubin .6s cubic-bezier(.22,1,.36,1) both}
@@ -177,12 +475,69 @@ html{scroll-behavior:smooth}
   .why dt{font-size:11.6px}
   .why dd{font-size:13.8px}
 }
-</style></head><body>
+</style><script>/* Dan's Investment Dashboard · 看板主题脚本（独立仓库用，同步副本，勿手改）
+   真源：Dan's Investment Dashboard / theme/board-theme.js
+   作用：在样式生效前先落到正确的明暗档（避免闪一下），并驱动 .theme-toggle。
+   为什么切档要 reload：看板里的图是加载时按令牌取色画的（SVG 属性与 canvas 都不认
+   var()），重画一遍比分页挂重绘钩子可靠；代价是丢滚动位置。 */
+(function () {
+  'use strict';
+  var KEY = 'dan-dash-theme';
+  var root = document.documentElement;
+
+  function read() {
+    try { return localStorage.getItem(KEY); } catch (e) { return null; }
+  }
+  function apply(mode) {
+    if (mode === 'dark' || mode === 'light') root.setAttribute('data-theme', mode);
+    else root.removeAttribute('data-theme');
+  }
+
+  // 看板默认浅色（纸本），不跟系统走：系统跟随只在本站研究页里保留。
+  // 没存过偏好就显式写 light，于是 tokens.css 里那条 prefers-color-scheme 不会生效。
+  var saved = read();
+  if (saved !== 'dark' && saved !== 'light') saved = 'light';
+  apply(saved);
+
+  function isDark() {
+    return root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+
+  function sync() {
+    var dark = isDark();
+    Array.prototype.forEach.call(document.querySelectorAll('.theme-toggle'), function (btn) {
+      btn.setAttribute('aria-pressed', String(dark));
+      btn.title = dark ? '切换到浅色' : '切换到深色';
+      var lab = btn.querySelector('.tt-lab');
+      if (lab) lab.textContent = dark ? '浅色' : '深色';
+    });
+  }
+
+  function boot() {
+    sync();
+    document.addEventListener('click', function (ev) {
+      var btn = ev.target.closest && ev.target.closest('.theme-toggle');
+      if (!btn) return;
+      ev.preventDefault();
+      var next = isDark() ? 'light' : 'dark';
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+      apply(next);
+      window.location.reload();
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script></head><body>
 <div class="bar"><div class="bar-in">
 <a class="brand" href="index.html"><span class="dot"></span>AI 主题复盘</a>
 <span class="sp"></span>
 <a class="btn" href="archive.html" title="全部 55 期历史归档 · 温度与中位的逐日总览"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg>历史总览</a>
 <a class="btn" href="manual.html" title="数据从哪来、谁在用哪个接口、哪些拿不到"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v1m0 3v6"/></svg>项目说明</a>
+<button class="theme-toggle" type="button" aria-pressed="false" title="切换浅色 / 深色">◐<span class="tt-lab">深色</span></button>
 </div></div>
 <div class="hwrap">
 <header class="hhead">
@@ -213,17 +568,17 @@ html{scroll-behavior:smooth}
 
 <section class="hsec">
 <h2>温度史</h2>
-<div class="chart"><svg viewBox='0 0 1000 316' role='img'><line x1='46' y1='139.5' x2='984' y2='139.5' stroke='#3fb95033' stroke-dasharray='3 4'/><text x='38' y='143.5' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>25</text><line x1='46' y1='79.6' x2='984' y2='79.6' stroke='#d2992233' stroke-dasharray='3 4'/><text x='38' y='83.6' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>62</text><line x1='46' y1='50.4' x2='984' y2='50.4' stroke='#f8514933' stroke-dasharray='3 4'/><text x='38' y='54.4' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>80</text><polyline points='46.0,131.2 63.4,122.7 80.7,103.5 98.1,125.6 115.5,68.5 132.9,121.9 150.2,104.0 167.6,119.2 185.0,114.3 202.3,125.3 219.7,97.9 237.1,69.1 254.4,108.2 271.8,69.3 289.2,89.7 306.6,99.6 323.9,110.9 341.3,140.5 358.7,152.6 376.0,96.2 393.4,128.5 410.8,139.9 428.1,114.1 445.5,133.7 462.9,105.0 480.3,144.6 497.6,143.8 515.0,96.6 532.4,99.9 549.7,97.1 567.1,107.0 584.5,148.3 601.9,57.6 619.2,135.9 636.6,140.7 654.0,53.7 671.3,152.7 688.7,147.9 706.1,81.1 723.4,144.5 740.8,44.0 758.2,79.7 775.6,147.9 792.9,95.7 810.3,82.4 827.7,68.3 845.0,112.2 862.4,133.7 879.8,151.1 897.1,111.3 914.5,78.5 931.9,104.9 949.3,150.6 966.6,63.8 984.0,87.0' fill='none' stroke='#58a6ff' stroke-width='1.8' stroke-linejoin='round'/><circle cx='46.0' cy='131.2' r='11' fill='transparent' data-tip='2026-09-01　温度 30 偏冷&#10;A 股中位 -2.21%　7/34 涨跌'/><circle cx='46.0' cy='131.2' r='4.4' fill='#58a6ff' data-tip='2026-09-01　温度 30 偏冷&#10;A 股中位 -2.21%　7/34 涨跌'/><circle cx='63.4' cy='122.7' r='11' fill='transparent' data-tip='2026-09-02　温度 35 偏冷&#10;A 股中位 -1.38%　10/31 涨跌'/><circle cx='63.4' cy='122.7' r='4.4' fill='#58a6ff' data-tip='2026-09-02　温度 35 偏冷&#10;A 股中位 -1.38%　10/31 涨跌'/><circle cx='80.7' cy='103.5' r='11' fill='transparent' data-tip='2026-09-03　温度 47 常温&#10;A 股中位 -0.06%　18/22 涨跌'/><circle cx='80.7' cy='103.5' r='4.4' fill='#58a6ff' data-tip='2026-09-03　温度 47 常温&#10;A 股中位 -0.06%　18/22 涨跌'/><circle cx='98.1' cy='125.6' r='11' fill='transparent' data-tip='2026-09-04　温度 34 偏冷&#10;A 股中位 -2.20%　12/29 涨跌'/><circle cx='98.1' cy='125.6' r='4.4' fill='#58a6ff' data-tip='2026-09-04　温度 34 偏冷&#10;A 股中位 -2.20%　12/29 涨跌'/><circle cx='115.5' cy='68.5' r='11' fill='transparent' data-tip='2026-09-07　温度 69 升温&#10;A 股中位 +2.46%　31/10 涨跌'/><circle cx='115.5' cy='68.5' r='4.4' fill='#58a6ff' data-tip='2026-09-07　温度 69 升温&#10;A 股中位 +2.46%　31/10 涨跌'/><circle cx='132.9' cy='121.9' r='11' fill='transparent' data-tip='2026-09-08　温度 36 偏冷&#10;A 股中位 -1.49%　10/31 涨跌'/><circle cx='132.9' cy='121.9' r='4.4' fill='#58a6ff' data-tip='2026-09-08　温度 36 偏冷&#10;A 股中位 -1.49%　10/31 涨跌'/><circle cx='150.2' cy='104.0' r='11' fill='transparent' data-tip='2026-09-09　温度 47 常温&#10;A 股中位 -0.18%　18/23 涨跌'/><circle cx='150.2' cy='104.0' r='4.4' fill='#58a6ff' data-tip='2026-09-09　温度 47 常温&#10;A 股中位 -0.18%　18/23 涨跌'/><circle cx='167.6' cy='119.2' r='11' fill='transparent' data-tip='2026-09-10　温度 38 偏冷&#10;A 股中位 -1.05%　11/29 涨跌'/><circle cx='167.6' cy='119.2' r='4.4' fill='#58a6ff' data-tip='2026-09-10　温度 38 偏冷&#10;A 股中位 -1.05%　11/29 涨跌'/><circle cx='185.0' cy='114.3' r='11' fill='transparent' data-tip='2026-09-11　温度 41 偏冷&#10;A 股中位 -0.87%　12/29 涨跌'/><circle cx='185.0' cy='114.3' r='4.4' fill='#58a6ff' data-tip='2026-09-11　温度 41 偏冷&#10;A 股中位 -0.87%　12/29 涨跌'/><circle cx='202.3' cy='125.3' r='11' fill='transparent' data-tip='2026-09-14　温度 34 偏冷&#10;A 股中位 -1.64%　10/30 涨跌&#10;10 日波动 1.31%（平静）'/><circle cx='202.3' cy='125.3' r='4.4' fill='#58a6ff' data-tip='2026-09-14　温度 34 偏冷&#10;A 股中位 -1.64%　10/30 涨跌&#10;10 日波动 1.31%（平静）'/><circle cx='219.7' cy='97.9' r='11' fill='transparent' data-tip='2026-09-15　温度 51 常温&#10;A 股中位 +0.16%　23/18 涨跌&#10;10 日波动 1.25%（平静）'/><circle cx='219.7' cy='97.9' r='4.4' fill='#58a6ff' data-tip='2026-09-15　温度 51 常温&#10;A 股中位 +0.16%　23/18 涨跌&#10;10 日波动 1.25%（平静）'/><circle cx='237.1' cy='69.1' r='11' fill='transparent' data-tip='2026-09-16　温度 68 升温&#10;A 股中位 +2.52%　30/11 涨跌&#10;10 日波动 1.53%（常态）'/><circle cx='237.1' cy='69.1' r='4.4' fill='#58a6ff' data-tip='2026-09-16　温度 68 升温&#10;A 股中位 +2.52%　30/11 涨跌&#10;10 日波动 1.53%（常态）'/><circle cx='254.4' cy='108.2' r='11' fill='transparent' data-tip='2026-09-17　温度 44 偏冷&#10;A 股中位 -0.49%　16/25 涨跌&#10;10 日波动 1.53%（常态）'/><circle cx='254.4' cy='108.2' r='4.4' fill='#58a6ff' data-tip='2026-09-17　温度 44 偏冷&#10;A 股中位 -0.49%　16/25 涨跌&#10;10 日波动 1.53%（常态）'/><circle cx='271.8' cy='69.3' r='11' fill='transparent' data-tip='2026-09-18　温度 68 升温&#10;A 股中位 +2.09%　32/9 涨跌&#10;10 日波动 1.54%（常态）'/><circle cx='271.8' cy='69.3' r='4.4' fill='#58a6ff' data-tip='2026-09-18　温度 68 升温&#10;A 股中位 +2.09%　32/9 涨跌&#10;10 日波动 1.54%（常态）'/><circle cx='289.2' cy='89.7' r='11' fill='transparent' data-tip='2026-09-21　温度 56 常温&#10;A 股中位 +0.63%　24/16 涨跌&#10;10 日波动 1.35%（平静）'/><circle cx='289.2' cy='89.7' r='4.4' fill='#58a6ff' data-tip='2026-09-21　温度 56 常温&#10;A 股中位 +0.63%　24/16 涨跌&#10;10 日波动 1.35%（平静）'/><circle cx='306.6' cy='99.6' r='11' fill='transparent' data-tip='2026-09-22　温度 50 常温&#10;A 股中位 -0.07%　19/22 涨跌&#10;10 日波动 1.26%（平静）'/><circle cx='306.6' cy='99.6' r='4.4' fill='#58a6ff' data-tip='2026-09-22　温度 50 常温&#10;A 股中位 -0.07%　19/22 涨跌&#10;10 日波动 1.26%（平静）'/><circle cx='323.9' cy='110.9' r='11' fill='transparent' data-tip='2026-09-23　温度 43 偏冷&#10;A 股中位 -0.45%　13/28 涨跌&#10;10 日波动 1.27%（平静）'/><circle cx='323.9' cy='110.9' r='4.4' fill='#58a6ff' data-tip='2026-09-23　温度 43 偏冷&#10;A 股中位 -0.45%　13/28 涨跌&#10;10 日波动 1.27%（平静）'/><circle cx='341.3' cy='140.5' r='11' fill='transparent' data-tip='2026-09-24　温度 24 冰点&#10;A 股中位 -2.88%　5/36 涨跌&#10;10 日波动 1.52%（常态）'/><circle cx='341.3' cy='140.5' r='4.4' fill='#58a6ff' data-tip='2026-09-24　温度 24 冰点&#10;A 股中位 -2.88%　5/36 涨跌&#10;10 日波动 1.52%（常态）'/><circle cx='358.7' cy='152.6' r='11' fill='transparent' data-tip='2026-09-28　温度 17 冰点&#10;A 股中位 -4.35%　2/39 涨跌&#10;10 日波动 1.99%（常态）'/><circle cx='358.7' cy='152.6' r='4.4' fill='#58a6ff' data-tip='2026-09-28　温度 17 冰点&#10;A 股中位 -4.35%　2/39 涨跌&#10;10 日波动 1.99%（常态）'/><circle cx='376.0' cy='96.2' r='11' fill='transparent' data-tip='2026-09-29　温度 52 常温&#10;A 股中位 +0.41%　24/17 涨跌&#10;10 日波动 1.96%（常态）'/><circle cx='376.0' cy='96.2' r='4.4' fill='#58a6ff' data-tip='2026-09-29　温度 52 常温&#10;A 股中位 +0.41%　24/17 涨跌&#10;10 日波动 1.96%（常态）'/><circle cx='393.4' cy='128.5' r='11' fill='transparent' data-tip='2026-09-30　温度 32 偏冷&#10;A 股中位 -1.91%　10/31 涨跌&#10;10 日波动 2.01%（常态）'/><circle cx='393.4' cy='128.5' r='4.4' fill='#58a6ff' data-tip='2026-09-30　温度 32 偏冷&#10;A 股中位 -1.91%　10/31 涨跌&#10;10 日波动 2.01%（常态）'/><circle cx='410.8' cy='139.9' r='11' fill='transparent' data-tip='2026-10-08　温度 25 冰点&#10;A 股中位 -2.78%　4/37 涨跌&#10;10 日波动 1.85%（常态）'/><circle cx='410.8' cy='139.9' r='4.4' fill='#58a6ff' data-tip='2026-10-08　温度 25 冰点&#10;A 股中位 -2.78%　4/37 涨跌&#10;10 日波动 1.85%（常态）'/><circle cx='428.1' cy='114.1' r='11' fill='transparent' data-tip='2026-10-09　温度 41 偏冷&#10;A 股中位 -1.05%　14/27 涨跌&#10;10 日波动 1.85%（常态）'/><circle cx='428.1' cy='114.1' r='4.4' fill='#58a6ff' data-tip='2026-10-09　温度 41 偏冷&#10;A 股中位 -1.05%　14/27 涨跌&#10;10 日波动 1.85%（常态）'/><circle cx='445.5' cy='133.7' r='11' fill='transparent' data-tip='2026-10-12　温度 29 偏冷&#10;A 股中位 -2.37%　8/33 涨跌&#10;10 日波动 1.55%（常态）'/><circle cx='445.5' cy='133.7' r='4.4' fill='#58a6ff' data-tip='2026-10-12　温度 29 偏冷&#10;A 股中位 -2.37%　8/33 涨跌&#10;10 日波动 1.55%（常态）'/><circle cx='462.9' cy='105.0' r='11' fill='transparent' data-tip='2026-10-13　温度 46 常温&#10;A 股中位 -0.24%　18/23 涨跌&#10;10 日波动 1.45%（平静）'/><circle cx='462.9' cy='105.0' r='4.4' fill='#58a6ff' data-tip='2026-10-13　温度 46 常温&#10;A 股中位 -0.24%　18/23 涨跌&#10;10 日波动 1.45%（平静）'/><circle cx='480.3' cy='144.6' r='11' fill='transparent' data-tip='2026-10-14　温度 22 冰点&#10;A 股中位 -2.92%　2/39 涨跌&#10;10 日波动 1.41%（平静）'/><circle cx='480.3' cy='144.6' r='4.4' fill='#58a6ff' data-tip='2026-10-14　温度 22 冰点&#10;A 股中位 -2.92%　2/39 涨跌&#10;10 日波动 1.41%（平静）'/><circle cx='497.6' cy='143.8' r='11' fill='transparent' data-tip='2026-10-15　温度 22 冰点&#10;A 股中位 -3.89%　11/30 涨跌&#10;10 日波动 1.45%（平静）'/><circle cx='497.6' cy='143.8' r='4.4' fill='#58a6ff' data-tip='2026-10-15　温度 22 冰点&#10;A 股中位 -3.89%　11/30 涨跌&#10;10 日波动 1.45%（平静）'/><circle cx='515.0' cy='96.6' r='11' fill='transparent' data-tip='2026-10-16　温度 51 常温&#10;A 股中位 +0.29%　23/18 涨跌&#10;10 日波动 1.60%（常态）'/><circle cx='515.0' cy='96.6' r='4.4' fill='#58a6ff' data-tip='2026-10-16　温度 51 常温&#10;A 股中位 +0.29%　23/18 涨跌&#10;10 日波动 1.60%（常态）'/><circle cx='532.4' cy='99.9' r='11' fill='transparent' data-tip='2026-10-19　温度 49 常温&#10;A 股中位 +0.21%　21/20 涨跌&#10;10 日波动 1.48%（平静）'/><circle cx='532.4' cy='99.9' r='4.4' fill='#58a6ff' data-tip='2026-10-19　温度 49 常温&#10;A 股中位 +0.21%　21/20 涨跌&#10;10 日波动 1.48%（平静）'/><circle cx='549.7' cy='97.1' r='11' fill='transparent' data-tip='2026-10-20　温度 51 常温&#10;A 股中位 +0.28%　23/17 涨跌&#10;10 日波动 1.46%（平静）'/><circle cx='549.7' cy='97.1' r='4.4' fill='#58a6ff' data-tip='2026-10-20　温度 51 常温&#10;A 股中位 +0.28%　23/17 涨跌&#10;10 日波动 1.46%（平静）'/><circle cx='567.1' cy='107.0' r='11' fill='transparent' data-tip='2026-10-21　温度 45 常温&#10;A 股中位 -0.21%　17/24 涨跌&#10;10 日波动 1.49%（平静）'/><circle cx='567.1' cy='107.0' r='4.4' fill='#58a6ff' data-tip='2026-10-21　温度 45 常温&#10;A 股中位 -0.21%　17/24 涨跌&#10;10 日波动 1.49%（平静）'/><circle cx='584.5' cy='148.3' r='11' fill='transparent' data-tip='2026-10-22　温度 20 冰点&#10;A 股中位 -3.56%　3/38 涨跌&#10;10 日波动 1.59%（常态）'/><circle cx='584.5' cy='148.3' r='4.4' fill='#58a6ff' data-tip='2026-10-22　温度 20 冰点&#10;A 股中位 -3.56%　3/38 涨跌&#10;10 日波动 1.59%（常态）'/><circle cx='601.9' cy='57.6' r='11' fill='transparent' data-tip='2026-10-23　温度 76 升温&#10;A 股中位 +2.78%　38/3 涨跌&#10;10 日波动 2.02%（常态）'/><circle cx='601.9' cy='57.6' r='4.4' fill='#58a6ff' data-tip='2026-10-23　温度 76 升温&#10;A 股中位 +2.78%　38/3 涨跌&#10;10 日波动 2.02%（常态）'/><circle cx='619.2' cy='135.9' r='11' fill='transparent' data-tip='2026-10-26　温度 27 偏冷&#10;A 股中位 -2.88%　9/32 涨跌&#10;10 日波动 2.06%（常态）'/><circle cx='619.2' cy='135.9' r='4.4' fill='#58a6ff' data-tip='2026-10-26　温度 27 偏冷&#10;A 股中位 -2.88%　9/32 涨跌&#10;10 日波动 2.06%（常态）'/><circle cx='636.6' cy='140.7' r='11' fill='transparent' data-tip='2026-10-27　温度 24 冰点&#10;A 股中位 -2.78%　4/37 涨跌&#10;10 日波动 2.10%（常态）'/><circle cx='636.6' cy='140.7' r='4.4' fill='#58a6ff' data-tip='2026-10-27　温度 24 冰点&#10;A 股中位 -2.78%　4/37 涨跌&#10;10 日波动 2.10%（常态）'/><circle cx='654.0' cy='53.7' r='11' fill='transparent' data-tip='2026-10-28　温度 78 升温&#10;A 股中位 +3.62%　37/3 涨跌&#10;10 日波动 2.47%（常态）'/><circle cx='654.0' cy='53.7' r='4.4' fill='#58a6ff' data-tip='2026-10-28　温度 78 升温&#10;A 股中位 +3.62%　37/3 涨跌&#10;10 日波动 2.47%（常态）'/><circle cx='671.3' cy='152.7' r='11' fill='transparent' data-tip='2026-10-29　温度 17 冰点&#10;A 股中位 -4.53%　2/39 涨跌&#10;10 日波动 2.56%（常态）'/><circle cx='671.3' cy='152.7' r='4.4' fill='#58a6ff' data-tip='2026-10-29　温度 17 冰点&#10;A 股中位 -4.53%　2/39 涨跌&#10;10 日波动 2.56%（常态）'/><circle cx='688.7' cy='147.9' r='11' fill='transparent' data-tip='2026-10-30　温度 20 冰点&#10;A 股中位 -4.76%　6/35 涨跌&#10;10 日波动 2.81%（常态）'/><circle cx='688.7' cy='147.9' r='4.4' fill='#58a6ff' data-tip='2026-10-30　温度 20 冰点&#10;A 股中位 -4.76%　6/35 涨跌&#10;10 日波动 2.81%（常态）'/><circle cx='706.1' cy='81.1' r='11' fill='transparent' data-tip='2026-11-02　温度 61 常温&#10;A 股中位 +1.60%　25/15 涨跌&#10;10 日波动 2.91%（常态）'/><circle cx='706.1' cy='81.1' r='4.4' fill='#58a6ff' data-tip='2026-11-02　温度 61 常温&#10;A 股中位 +1.60%　25/15 涨跌&#10;10 日波动 2.91%（常态）'/><circle cx='723.4' cy='144.5' r='11' fill='transparent' data-tip='2026-11-03　温度 22 冰点&#10;A 股中位 -4.98%　9/32 涨跌&#10;10 日波动 3.09%（剧烈）'/><circle cx='723.4' cy='144.5' r='4.4' fill='#58a6ff' data-tip='2026-11-03　温度 22 冰点&#10;A 股中位 -4.98%　9/32 涨跌&#10;10 日波动 3.09%（剧烈）'/><circle cx='740.8' cy='44.0' r='11' fill='transparent' data-tip='2026-11-04　温度 84 过热&#10;A 股中位 +9.49%　40/1 涨跌&#10;10 日波动 4.54%（剧烈）'/><circle cx='740.8' cy='44.0' r='4.4' fill='#58a6ff' data-tip='2026-11-04　温度 84 过热&#10;A 股中位 +9.49%　40/1 涨跌&#10;10 日波动 4.54%（剧烈）'/><circle cx='758.2' cy='79.7' r='11' fill='transparent' data-tip='2026-11-05　温度 62 常温&#10;A 股中位 +1.27%　26/15 涨跌&#10;10 日波动 4.46%（剧烈）'/><circle cx='758.2' cy='79.7' r='4.4' fill='#58a6ff' data-tip='2026-11-05　温度 62 常温&#10;A 股中位 +1.27%　26/15 涨跌&#10;10 日波动 4.46%（剧烈）'/><circle cx='775.6' cy='147.9' r='11' fill='transparent' data-tip='2026-11-06　温度 20 冰点&#10;A 股中位 -3.88%　5/35 涨跌&#10;10 日波动 4.48%（剧烈）'/><circle cx='775.6' cy='147.9' r='4.4' fill='#58a6ff' data-tip='2026-11-06　温度 20 冰点&#10;A 股中位 -3.88%　5/35 涨跌&#10;10 日波动 4.48%（剧烈）'/><circle cx='792.9' cy='95.7' r='11' fill='transparent' data-tip='2026-11-09　温度 52 常温&#10;A 股中位 +0.27%　24/17 涨跌&#10;10 日波动 4.43%（剧烈）'/><circle cx='792.9' cy='95.7' r='4.4' fill='#58a6ff' data-tip='2026-11-09　温度 52 常温&#10;A 股中位 +0.27%　24/17 涨跌&#10;10 日波动 4.43%（剧烈）'/><circle cx='810.3' cy='82.4' r='11' fill='transparent' data-tip='2026-11-10　温度 60 常温&#10;A 股中位 +1.15%　30/11 涨跌&#10;10 日波动 4.38%（剧烈）'/><circle cx='810.3' cy='82.4' r='4.4' fill='#58a6ff' data-tip='2026-11-10　温度 60 常温&#10;A 股中位 +1.15%　30/11 涨跌&#10;10 日波动 4.38%（剧烈）'/><circle cx='827.7' cy='68.3' r='11' fill='transparent' data-tip='2026-11-11　温度 69 升温&#10;A 股中位 +2.58%　30/11 涨跌&#10;10 日波动 4.30%（剧烈）'/><circle cx='827.7' cy='68.3' r='4.4' fill='#58a6ff' data-tip='2026-11-11　温度 69 升温&#10;A 股中位 +2.58%　30/11 涨跌&#10;10 日波动 4.30%（剧烈）'/><circle cx='845.0' cy='112.2' r='11' fill='transparent' data-tip='2026-11-12　温度 42 偏冷&#10;A 股中位 -0.98%　14/26 涨跌&#10;10 日波动 4.07%（剧烈）'/><circle cx='845.0' cy='112.2' r='4.4' fill='#58a6ff' data-tip='2026-11-12　温度 42 偏冷&#10;A 股中位 -0.98%　14/26 涨跌&#10;10 日波动 4.07%（剧烈）'/><circle cx='862.4' cy='133.7' r='11' fill='transparent' data-tip='2026-11-13　温度 29 偏冷&#10;A 股中位 -2.69%　9/32 涨跌&#10;10 日波动 3.86%（剧烈）'/><circle cx='862.4' cy='133.7' r='4.4' fill='#58a6ff' data-tip='2026-11-13　温度 29 偏冷&#10;A 股中位 -2.69%　9/32 涨跌&#10;10 日波动 3.86%（剧烈）'/><circle cx='879.8' cy='151.1' r='11' fill='transparent' data-tip='2026-11-16　温度 18 冰点&#10;A 股中位 -5.16%　4/37 涨跌&#10;10 日波动 4.17%（剧烈）'/><circle cx='879.8' cy='151.1' r='4.4' fill='#58a6ff' data-tip='2026-11-16　温度 18 冰点&#10;A 股中位 -5.16%　4/37 涨跌&#10;10 日波动 4.17%（剧烈）'/><circle cx='897.1' cy='111.3' r='11' fill='transparent' data-tip='2026-11-17　温度 42 偏冷&#10;A 股中位 -0.88%　18/23 涨跌&#10;10 日波动 3.88%（剧烈）'/><circle cx='897.1' cy='111.3' r='4.4' fill='#58a6ff' data-tip='2026-11-17　温度 42 偏冷&#10;A 股中位 -0.88%　18/23 涨跌&#10;10 日波动 3.88%（剧烈）'/><circle cx='914.5' cy='78.5' r='11' fill='transparent' data-tip='2026-11-18　温度 63 升温&#10;A 股中位 +1.89%　28/13 涨跌&#10;10 日波动 2.44%（常态）'/><circle cx='914.5' cy='78.5' r='4.4' fill='#58a6ff' data-tip='2026-11-18　温度 63 升温&#10;A 股中位 +1.89%　28/13 涨跌&#10;10 日波动 2.44%（常态）'/><circle cx='931.9' cy='104.9' r='11' fill='transparent' data-tip='2026-11-19　温度 46 常温&#10;A 股中位 -0.14%　19/22 涨跌&#10;10 日波动 2.37%（常态）'/><circle cx='931.9' cy='104.9' r='4.4' fill='#58a6ff' data-tip='2026-11-19　温度 46 常温&#10;A 股中位 -0.14%　19/22 涨跌&#10;10 日波动 2.37%（常态）'/><circle cx='949.3' cy='150.6' r='11' fill='transparent' data-tip='2026-11-20　温度 18 冰点&#10;A 股中位 -3.72%　2/39 涨跌&#10;10 日波动 2.35%（常态）'/><circle cx='949.3' cy='150.6' r='4.4' fill='#58a6ff' data-tip='2026-11-20　温度 18 冰点&#10;A 股中位 -3.72%　2/39 涨跌&#10;10 日波动 2.35%（常态）'/><circle cx='966.6' cy='63.8' r='11' fill='transparent' data-tip='2026-11-23　温度 72 升温&#10;A 股中位 +2.95%　32/9 涨跌&#10;10 日波动 2.59%（常态）'/><circle cx='966.6' cy='63.8' r='4.4' fill='#58a6ff' data-tip='2026-11-23　温度 72 升温&#10;A 股中位 +2.95%　32/9 涨跌&#10;10 日波动 2.59%（常态）'/><circle cx='984.0' cy='87.0' r='11' fill='transparent' data-tip='2026-11-24　温度 57 常温&#10;A 股中位 +0.96%　25/16 涨跌&#10;10 日波动 2.58%（常态）'/><circle class='pk' cx='984.0' cy='87.0' r='4.4' fill='#58a6ff' data-tip='2026-11-24　温度 57 常温&#10;A 股中位 +0.96%　25/16 涨跌&#10;10 日波动 2.58%（常态）'/><text x='46' y='198.0' fill='#8b949e' font-size='13.6' font-family='ui-monospace'>10 日波动率 %</text><line x1='46' y1='206' x2='984' y2='206' stroke='#232b36'/><rect x='46' y='212.0' width='938.0' height='31.2' fill='#f8514910'/><line x1='46' y1='266.6' x2='984' y2='266.6' stroke='#f8514933' stroke-dasharray='3 4'/><text x='38' y='270.6' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>1.5</text><line x1='46' y1='243.2' x2='984' y2='243.2' stroke='#3fb95033' stroke-dasharray='3 4'/><text x='38' y='247.2' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>3</text><polygon points='202.3,290 202.3,269.6 219.7,270.4 237.1,266.1 254.4,266.1 271.8,266.0 289.2,269.0 306.6,270.4 323.9,270.2 341.3,266.2 358.7,259.0 376.0,259.4 393.4,258.6 410.8,261.1 428.1,261.2 445.5,265.8 462.9,267.3 480.3,268.0 497.6,267.5 515.0,265.0 532.4,267.0 549.7,267.2 567.1,266.7 584.5,265.2 601.9,258.5 619.2,257.9 636.6,257.2 654.0,251.4 671.3,250.0 688.7,246.2 706.1,244.7 723.4,241.8 740.8,219.1 758.2,220.4 775.6,220.2 792.9,220.9 810.3,221.7 827.7,222.9 845.0,226.5 862.4,229.8 879.8,225.0 897.1,229.5 914.5,251.9 931.9,253.0 949.3,253.4 966.6,249.6 984.0,249.7 984.0,290' fill='#bc8cff' fill-opacity='.16'/><polyline points='202.3,269.6 219.7,270.4 237.1,266.1 254.4,266.1 271.8,266.0 289.2,269.0 306.6,270.4 323.9,270.2 341.3,266.2 358.7,259.0 376.0,259.4 393.4,258.6 410.8,261.1 428.1,261.2 445.5,265.8 462.9,267.3 480.3,268.0 497.6,267.5 515.0,265.0 532.4,267.0 549.7,267.2 567.1,266.7 584.5,265.2 601.9,258.5 619.2,257.9 636.6,257.2 654.0,251.4 671.3,250.0 688.7,246.2 706.1,244.7 723.4,241.8 740.8,219.1 758.2,220.4 775.6,220.2 792.9,220.9 810.3,221.7 827.7,222.9 845.0,226.5 862.4,229.8 879.8,225.0 897.1,229.5 914.5,251.9 931.9,253.0 949.3,253.4 966.6,249.6 984.0,249.7' fill='none' stroke='#bc8cff' stroke-width='1.6' stroke-linejoin='round'/><circle cx='202.3' cy='269.6' r='11' fill='transparent' data-tip='2026-09-14　10 日波动 1.31%（平静）&#10;窗口 10 个交易日　A 股中位 -1.64%'/><circle cx='202.3' cy='269.6' r='3.4' fill='#bc8cff' data-tip='2026-09-14　10 日波动 1.31%（平静）&#10;窗口 10 个交易日　A 股中位 -1.64%'/><circle cx='219.7' cy='270.4' r='11' fill='transparent' data-tip='2026-09-15　10 日波动 1.25%（平静）&#10;窗口 10 个交易日　A 股中位 +0.16%'/><circle cx='219.7' cy='270.4' r='3.4' fill='#bc8cff' data-tip='2026-09-15　10 日波动 1.25%（平静）&#10;窗口 10 个交易日　A 股中位 +0.16%'/><circle cx='237.1' cy='266.1' r='11' fill='transparent' data-tip='2026-09-16　10 日波动 1.53%（常态）&#10;窗口 10 个交易日　A 股中位 +2.52%'/><circle cx='237.1' cy='266.1' r='3.4' fill='#bc8cff' data-tip='2026-09-16　10 日波动 1.53%（常态）&#10;窗口 10 个交易日　A 股中位 +2.52%'/><circle cx='254.4' cy='266.1' r='11' fill='transparent' data-tip='2026-09-17　10 日波动 1.53%（常态）&#10;窗口 10 个交易日　A 股中位 -0.49%'/><circle cx='254.4' cy='266.1' r='3.4' fill='#bc8cff' data-tip='2026-09-17　10 日波动 1.53%（常态）&#10;窗口 10 个交易日　A 股中位 -0.49%'/><circle cx='271.8' cy='266.0' r='11' fill='transparent' data-tip='2026-09-18　10 日波动 1.54%（常态）&#10;窗口 10 个交易日　A 股中位 +2.09%'/><circle cx='271.8' cy='266.0' r='3.4' fill='#bc8cff' data-tip='2026-09-18　10 日波动 1.54%（常态）&#10;窗口 10 个交易日　A 股中位 +2.09%'/><circle cx='289.2' cy='269.0' r='11' fill='transparent' data-tip='2026-09-21　10 日波动 1.35%（平静）&#10;窗口 10 个交易日　A 股中位 +0.63%'/><circle cx='289.2' cy='269.0' r='3.4' fill='#bc8cff' data-tip='2026-09-21　10 日波动 1.35%（平静）&#10;窗口 10 个交易日　A 股中位 +0.63%'/><circle cx='306.6' cy='270.4' r='11' fill='transparent' data-tip='2026-09-22　10 日波动 1.26%（平静）&#10;窗口 10 个交易日　A 股中位 -0.07%'/><circle cx='306.6' cy='270.4' r='3.4' fill='#bc8cff' data-tip='2026-09-22　10 日波动 1.26%（平静）&#10;窗口 10 个交易日　A 股中位 -0.07%'/><circle cx='323.9' cy='270.2' r='11' fill='transparent' data-tip='2026-09-23　10 日波动 1.27%（平静）&#10;窗口 10 个交易日　A 股中位 -0.45%'/><circle cx='323.9' cy='270.2' r='3.4' fill='#bc8cff' data-tip='2026-09-23　10 日波动 1.27%（平静）&#10;窗口 10 个交易日　A 股中位 -0.45%'/><circle cx='341.3' cy='266.2' r='11' fill='transparent' data-tip='2026-09-24　10 日波动 1.52%（常态）&#10;窗口 10 个交易日　A 股中位 -2.88%'/><circle cx='341.3' cy='266.2' r='3.4' fill='#bc8cff' data-tip='2026-09-24　10 日波动 1.52%（常态）&#10;窗口 10 个交易日　A 股中位 -2.88%'/><circle cx='358.7' cy='259.0' r='11' fill='transparent' data-tip='2026-09-28　10 日波动 1.99%（常态）&#10;窗口 10 个交易日　A 股中位 -4.35%'/><circle cx='358.7' cy='259.0' r='3.4' fill='#bc8cff' data-tip='2026-09-28　10 日波动 1.99%（常态）&#10;窗口 10 个交易日　A 股中位 -4.35%'/><circle cx='376.0' cy='259.4' r='11' fill='transparent' data-tip='2026-09-29　10 日波动 1.96%（常态）&#10;窗口 10 个交易日　A 股中位 +0.41%'/><circle cx='376.0' cy='259.4' r='3.4' fill='#bc8cff' data-tip='2026-09-29　10 日波动 1.96%（常态）&#10;窗口 10 个交易日　A 股中位 +0.41%'/><circle cx='393.4' cy='258.6' r='11' fill='transparent' data-tip='2026-09-30　10 日波动 2.01%（常态）&#10;窗口 10 个交易日　A 股中位 -1.91%'/><circle cx='393.4' cy='258.6' r='3.4' fill='#bc8cff' data-tip='2026-09-30　10 日波动 2.01%（常态）&#10;窗口 10 个交易日　A 股中位 -1.91%'/><circle cx='410.8' cy='261.1' r='11' fill='transparent' data-tip='2026-10-08　10 日波动 1.85%（常态）&#10;窗口 10 个交易日　A 股中位 -2.78%'/><circle cx='410.8' cy='261.1' r='3.4' fill='#bc8cff' data-tip='2026-10-08　10 日波动 1.85%（常态）&#10;窗口 10 个交易日　A 股中位 -2.78%'/><circle cx='428.1' cy='261.2' r='11' fill='transparent' data-tip='2026-10-09　10 日波动 1.85%（常态）&#10;窗口 10 个交易日　A 股中位 -1.05%'/><circle cx='428.1' cy='261.2' r='3.4' fill='#bc8cff' data-tip='2026-10-09　10 日波动 1.85%（常态）&#10;窗口 10 个交易日　A 股中位 -1.05%'/><circle cx='445.5' cy='265.8' r='11' fill='transparent' data-tip='2026-10-12　10 日波动 1.55%（常态）&#10;窗口 10 个交易日　A 股中位 -2.37%'/><circle cx='445.5' cy='265.8' r='3.4' fill='#bc8cff' data-tip='2026-10-12　10 日波动 1.55%（常态）&#10;窗口 10 个交易日　A 股中位 -2.37%'/><circle cx='462.9' cy='267.3' r='11' fill='transparent' data-tip='2026-10-13　10 日波动 1.45%（平静）&#10;窗口 10 个交易日　A 股中位 -0.24%'/><circle cx='462.9' cy='267.3' r='3.4' fill='#bc8cff' data-tip='2026-10-13　10 日波动 1.45%（平静）&#10;窗口 10 个交易日　A 股中位 -0.24%'/><circle cx='480.3' cy='268.0' r='11' fill='transparent' data-tip='2026-10-14　10 日波动 1.41%（平静）&#10;窗口 10 个交易日　A 股中位 -2.92%'/><circle cx='480.3' cy='268.0' r='3.4' fill='#bc8cff' data-tip='2026-10-14　10 日波动 1.41%（平静）&#10;窗口 10 个交易日　A 股中位 -2.92%'/><circle cx='497.6' cy='267.5' r='11' fill='transparent' data-tip='2026-10-15　10 日波动 1.45%（平静）&#10;窗口 10 个交易日　A 股中位 -3.89%'/><circle cx='497.6' cy='267.5' r='3.4' fill='#bc8cff' data-tip='2026-10-15　10 日波动 1.45%（平静）&#10;窗口 10 个交易日　A 股中位 -3.89%'/><circle cx='515.0' cy='265.0' r='11' fill='transparent' data-tip='2026-10-16　10 日波动 1.60%（常态）&#10;窗口 10 个交易日　A 股中位 +0.29%'/><circle cx='515.0' cy='265.0' r='3.4' fill='#bc8cff' data-tip='2026-10-16　10 日波动 1.60%（常态）&#10;窗口 10 个交易日　A 股中位 +0.29%'/><circle cx='532.4' cy='267.0' r='11' fill='transparent' data-tip='2026-10-19　10 日波动 1.48%（平静）&#10;窗口 10 个交易日　A 股中位 +0.21%'/><circle cx='532.4' cy='267.0' r='3.4' fill='#bc8cff' data-tip='2026-10-19　10 日波动 1.48%（平静）&#10;窗口 10 个交易日　A 股中位 +0.21%'/><circle cx='549.7' cy='267.2' r='11' fill='transparent' data-tip='2026-10-20　10 日波动 1.46%（平静）&#10;窗口 10 个交易日　A 股中位 +0.28%'/><circle cx='549.7' cy='267.2' r='3.4' fill='#bc8cff' data-tip='2026-10-20　10 日波动 1.46%（平静）&#10;窗口 10 个交易日　A 股中位 +0.28%'/><circle cx='567.1' cy='266.7' r='11' fill='transparent' data-tip='2026-10-21　10 日波动 1.49%（平静）&#10;窗口 10 个交易日　A 股中位 -0.21%'/><circle cx='567.1' cy='266.7' r='3.4' fill='#bc8cff' data-tip='2026-10-21　10 日波动 1.49%（平静）&#10;窗口 10 个交易日　A 股中位 -0.21%'/><circle cx='584.5' cy='265.2' r='11' fill='transparent' data-tip='2026-10-22　10 日波动 1.59%（常态）&#10;窗口 10 个交易日　A 股中位 -3.56%'/><circle cx='584.5' cy='265.2' r='3.4' fill='#bc8cff' data-tip='2026-10-22　10 日波动 1.59%（常态）&#10;窗口 10 个交易日　A 股中位 -3.56%'/><circle cx='601.9' cy='258.5' r='11' fill='transparent' data-tip='2026-10-23　10 日波动 2.02%（常态）&#10;窗口 10 个交易日　A 股中位 +2.78%'/><circle cx='601.9' cy='258.5' r='3.4' fill='#bc8cff' data-tip='2026-10-23　10 日波动 2.02%（常态）&#10;窗口 10 个交易日　A 股中位 +2.78%'/><circle cx='619.2' cy='257.9' r='11' fill='transparent' data-tip='2026-10-26　10 日波动 2.06%（常态）&#10;窗口 10 个交易日　A 股中位 -2.88%'/><circle cx='619.2' cy='257.9' r='3.4' fill='#bc8cff' data-tip='2026-10-26　10 日波动 2.06%（常态）&#10;窗口 10 个交易日　A 股中位 -2.88%'/><circle cx='636.6' cy='257.2' r='11' fill='transparent' data-tip='2026-10-27　10 日波动 2.10%（常态）&#10;窗口 10 个交易日　A 股中位 -2.78%'/><circle cx='636.6' cy='257.2' r='3.4' fill='#bc8cff' data-tip='2026-10-27　10 日波动 2.10%（常态）&#10;窗口 10 个交易日　A 股中位 -2.78%'/><circle cx='654.0' cy='251.4' r='11' fill='transparent' data-tip='2026-10-28　10 日波动 2.47%（常态）&#10;窗口 10 个交易日　A 股中位 +3.62%'/><circle cx='654.0' cy='251.4' r='3.4' fill='#bc8cff' data-tip='2026-10-28　10 日波动 2.47%（常态）&#10;窗口 10 个交易日　A 股中位 +3.62%'/><circle cx='671.3' cy='250.0' r='11' fill='transparent' data-tip='2026-10-29　10 日波动 2.56%（常态）&#10;窗口 10 个交易日　A 股中位 -4.53%'/><circle cx='671.3' cy='250.0' r='3.4' fill='#bc8cff' data-tip='2026-10-29　10 日波动 2.56%（常态）&#10;窗口 10 个交易日　A 股中位 -4.53%'/><circle cx='688.7' cy='246.2' r='11' fill='transparent' data-tip='2026-10-30　10 日波动 2.81%（常态）&#10;窗口 10 个交易日　A 股中位 -4.76%'/><circle cx='688.7' cy='246.2' r='3.4' fill='#bc8cff' data-tip='2026-10-30　10 日波动 2.81%（常态）&#10;窗口 10 个交易日　A 股中位 -4.76%'/><circle cx='706.1' cy='244.7' r='11' fill='transparent' data-tip='2026-11-02　10 日波动 2.91%（常态）&#10;窗口 10 个交易日　A 股中位 +1.60%'/><circle cx='706.1' cy='244.7' r='3.4' fill='#bc8cff' data-tip='2026-11-02　10 日波动 2.91%（常态）&#10;窗口 10 个交易日　A 股中位 +1.60%'/><circle cx='723.4' cy='241.8' r='11' fill='transparent' data-tip='2026-11-03　10 日波动 3.09%（剧烈）&#10;窗口 10 个交易日　A 股中位 -4.98%'/><circle cx='723.4' cy='241.8' r='3.4' fill='#bc8cff' data-tip='2026-11-03　10 日波动 3.09%（剧烈）&#10;窗口 10 个交易日　A 股中位 -4.98%'/><circle cx='740.8' cy='219.1' r='11' fill='transparent' data-tip='2026-11-04　10 日波动 4.54%（剧烈）&#10;窗口 10 个交易日　A 股中位 +9.49%'/><circle cx='740.8' cy='219.1' r='3.4' fill='#bc8cff' data-tip='2026-11-04　10 日波动 4.54%（剧烈）&#10;窗口 10 个交易日　A 股中位 +9.49%'/><circle cx='758.2' cy='220.4' r='11' fill='transparent' data-tip='2026-11-05　10 日波动 4.46%（剧烈）&#10;窗口 10 个交易日　A 股中位 +1.27%'/><circle cx='758.2' cy='220.4' r='3.4' fill='#bc8cff' data-tip='2026-11-05　10 日波动 4.46%（剧烈）&#10;窗口 10 个交易日　A 股中位 +1.27%'/><circle cx='775.6' cy='220.2' r='11' fill='transparent' data-tip='2026-11-06　10 日波动 4.48%（剧烈）&#10;窗口 10 个交易日　A 股中位 -3.88%'/><circle cx='775.6' cy='220.2' r='3.4' fill='#bc8cff' data-tip='2026-11-06　10 日波动 4.48%（剧烈）&#10;窗口 10 个交易日　A 股中位 -3.88%'/><circle cx='792.9' cy='220.9' r='11' fill='transparent' data-tip='2026-11-09　10 日波动 4.43%（剧烈）&#10;窗口 10 个交易日　A 股中位 +0.27%'/><circle cx='792.9' cy='220.9' r='3.4' fill='#bc8cff' data-tip='2026-11-09　10 日波动 4.43%（剧烈）&#10;窗口 10 个交易日　A 股中位 +0.27%'/><circle cx='810.3' cy='221.7' r='11' fill='transparent' data-tip='2026-11-10　10 日波动 4.38%（剧烈）&#10;窗口 10 个交易日　A 股中位 +1.15%'/><circle cx='810.3' cy='221.7' r='3.4' fill='#bc8cff' data-tip='2026-11-10　10 日波动 4.38%（剧烈）&#10;窗口 10 个交易日　A 股中位 +1.15%'/><circle cx='827.7' cy='222.9' r='11' fill='transparent' data-tip='2026-11-11　10 日波动 4.30%（剧烈）&#10;窗口 10 个交易日　A 股中位 +2.58%'/><circle cx='827.7' cy='222.9' r='3.4' fill='#bc8cff' data-tip='2026-11-11　10 日波动 4.30%（剧烈）&#10;窗口 10 个交易日　A 股中位 +2.58%'/><circle cx='845.0' cy='226.5' r='11' fill='transparent' data-tip='2026-11-12　10 日波动 4.07%（剧烈）&#10;窗口 10 个交易日　A 股中位 -0.98%'/><circle cx='845.0' cy='226.5' r='3.4' fill='#bc8cff' data-tip='2026-11-12　10 日波动 4.07%（剧烈）&#10;窗口 10 个交易日　A 股中位 -0.98%'/><circle cx='862.4' cy='229.8' r='11' fill='transparent' data-tip='2026-11-13　10 日波动 3.86%（剧烈）&#10;窗口 10 个交易日　A 股中位 -2.69%'/><circle cx='862.4' cy='229.8' r='3.4' fill='#bc8cff' data-tip='2026-11-13　10 日波动 3.86%（剧烈）&#10;窗口 10 个交易日　A 股中位 -2.69%'/><circle cx='879.8' cy='225.0' r='11' fill='transparent' data-tip='2026-11-16　10 日波动 4.17%（剧烈）&#10;窗口 10 个交易日　A 股中位 -5.16%'/><circle cx='879.8' cy='225.0' r='3.4' fill='#bc8cff' data-tip='2026-11-16　10 日波动 4.17%（剧烈）&#10;窗口 10 个交易日　A 股中位 -5.16%'/><circle cx='897.1' cy='229.5' r='11' fill='transparent' data-tip='2026-11-17　10 日波动 3.88%（剧烈）&#10;窗口 10 个交易日　A 股中位 -0.88%'/><circle cx='897.1' cy='229.5' r='3.4' fill='#bc8cff' data-tip='2026-11-17　10 日波动 3.88%（剧烈）&#10;窗口 10 个交易日　A 股中位 -0.88%'/><circle cx='914.5' cy='251.9' r='11' fill='transparent' data-tip='2026-11-18　10 日波动 2.44%（常态）&#10;窗口 10 个交易日　A 股中位 +1.89%'/><circle cx='914.5' cy='251.9' r='3.4' fill='#bc8cff' data-tip='2026-11-18　10 日波动 2.44%（常态）&#10;窗口 10 个交易日　A 股中位 +1.89%'/><circle cx='931.9' cy='253.0' r='11' fill='transparent' data-tip='2026-11-19　10 日波动 2.37%（常态）&#10;窗口 10 个交易日　A 股中位 -0.14%'/><circle cx='931.9' cy='253.0' r='3.4' fill='#bc8cff' data-tip='2026-11-19　10 日波动 2.37%（常态）&#10;窗口 10 个交易日　A 股中位 -0.14%'/><circle cx='949.3' cy='253.4' r='11' fill='transparent' data-tip='2026-11-20　10 日波动 2.35%（常态）&#10;窗口 10 个交易日　A 股中位 -3.72%'/><circle cx='949.3' cy='253.4' r='3.4' fill='#bc8cff' data-tip='2026-11-20　10 日波动 2.35%（常态）&#10;窗口 10 个交易日　A 股中位 -3.72%'/><circle cx='966.6' cy='249.6' r='11' fill='transparent' data-tip='2026-11-23　10 日波动 2.59%（常态）&#10;窗口 10 个交易日　A 股中位 +2.95%'/><circle cx='966.6' cy='249.6' r='3.4' fill='#bc8cff' data-tip='2026-11-23　10 日波动 2.59%（常态）&#10;窗口 10 个交易日　A 股中位 +2.95%'/><circle cx='984.0' cy='249.7' r='11' fill='transparent' data-tip='2026-11-24　10 日波动 2.58%（常态）&#10;窗口 10 个交易日　A 股中位 +0.96%'/><circle class='pk' cx='984.0' cy='249.7' r='3.4' fill='#bc8cff' data-tip='2026-11-24　10 日波动 2.58%（常态）&#10;窗口 10 个交易日　A 股中位 +0.96%'/><text x='38' y='294.0' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>0</text><text x='38' y='216.0' fill='#8b949e' font-size='13.6' text-anchor='end' font-family='ui-monospace'>5</text><text x='46.0' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/01'</text><text x='150.2' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/09'</text><text x='254.4' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/17'</text><text x='358.7' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/28'</text><text x='462.9' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/13'</text><text x='567.1' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/21'</text><text x='671.3' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/29'</text><text x='775.6' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>11/06'</text><text x='879.8' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>11/16'</text><text x='974.0' y='308' fill='#8b949e' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>11/24'</text></svg></div>
+<div class="chart"><svg viewBox='0 0 1000 316' role='img'><line x1='46' y1='139.5' x2='984' y2='139.5' stroke='color-mix(in oklch, var(--down) 20%, transparent)' stroke-dasharray='3 4'/><text x='38' y='143.5' fill='var(--muted)' font-size='13.6' text-anchor='end' font-family='ui-monospace'>25</text><line x1='46' y1='79.6' x2='984' y2='79.6' stroke='color-mix(in oklch, var(--guide) 20%, transparent)' stroke-dasharray='3 4'/><text x='38' y='83.6' fill='var(--muted)' font-size='13.6' text-anchor='end' font-family='ui-monospace'>62</text><line x1='46' y1='50.4' x2='984' y2='50.4' stroke='color-mix(in oklch, var(--up) 20%, transparent)' stroke-dasharray='3 4'/><text x='38' y='54.4' fill='var(--muted)' font-size='13.6' text-anchor='end' font-family='ui-monospace'>80</text><polyline points='46.0,131.2 63.4,122.7 80.7,103.5 98.1,125.6 115.5,68.5 132.9,121.9 150.2,104.0 167.6,119.2 185.0,114.3 202.3,125.3 219.7,97.9 237.1,69.1 254.4,108.2 271.8,69.3 289.2,89.7 306.6,99.6 323.9,110.9 341.3,140.5 358.7,152.6 376.0,96.2 393.4,128.5 410.8,139.9 428.1,114.1 445.5,133.7 462.9,105.0 480.3,144.6 497.6,143.8 515.0,96.6 532.4,99.9 549.7,97.1 567.1,107.0 584.5,148.3 601.9,57.6 619.2,135.9 636.6,140.7 654.0,53.7 671.3,152.7 688.7,147.9 706.1,81.1 723.4,144.5 740.8,44.0 758.2,79.7 775.6,147.9 792.9,95.7 810.3,82.4 827.7,68.3 845.0,112.2 862.4,133.7 879.8,151.1 897.1,111.3 914.5,78.5 931.9,104.9 949.3,150.6 966.6,63.8 984.0,87.0' fill='none' stroke='var(--actual)' stroke-width='1.8' stroke-linejoin='round'/><circle cx='46.0' cy='131.2' r='11' fill='transparent' data-tip='2026-09-01　温度 30 偏冷&#10;A 股中位 -2.21%　7/34 涨跌'/><circle cx='46.0' cy='131.2' r='4.4' fill='var(--actual)' data-tip='2026-09-01　温度 30 偏冷&#10;A 股中位 -2.21%　7/34 涨跌'/><circle cx='63.4' cy='122.7' r='11' fill='transparent' data-tip='2026-09-02　温度 35 偏冷&#10;A 股中位 -1.38%　10/31 涨跌'/><circle cx='63.4' cy='122.7' r='4.4' fill='var(--actual)' data-tip='2026-09-02　温度 35 偏冷&#10;A 股中位 -1.38%　10/31 涨跌'/><circle cx='80.7' cy='103.5' r='11' fill='transparent' data-tip='2026-09-03　温度 47 常温&#10;A 股中位 -0.06%　18/22 涨跌'/><circle cx='80.7' cy='103.5' r='4.4' fill='var(--actual)' data-tip='2026-09-03　温度 47 常温&#10;A 股中位 -0.06%　18/22 涨跌'/><circle cx='98.1' cy='125.6' r='11' fill='transparent' data-tip='2026-09-04　温度 34 偏冷&#10;A 股中位 -2.20%　12/29 涨跌'/><circle cx='98.1' cy='125.6' r='4.4' fill='var(--actual)' data-tip='2026-09-04　温度 34 偏冷&#10;A 股中位 -2.20%　12/29 涨跌'/><circle cx='115.5' cy='68.5' r='11' fill='transparent' data-tip='2026-09-07　温度 69 升温&#10;A 股中位 +2.46%　31/10 涨跌'/><circle cx='115.5' cy='68.5' r='4.4' fill='var(--actual)' data-tip='2026-09-07　温度 69 升温&#10;A 股中位 +2.46%　31/10 涨跌'/><circle cx='132.9' cy='121.9' r='11' fill='transparent' data-tip='2026-09-08　温度 36 偏冷&#10;A 股中位 -1.49%　10/31 涨跌'/><circle cx='132.9' cy='121.9' r='4.4' fill='var(--actual)' data-tip='2026-09-08　温度 36 偏冷&#10;A 股中位 -1.49%　10/31 涨跌'/><circle cx='150.2' cy='104.0' r='11' fill='transparent' data-tip='2026-09-09　温度 47 常温&#10;A 股中位 -0.18%　18/23 涨跌'/><circle cx='150.2' cy='104.0' r='4.4' fill='var(--actual)' data-tip='2026-09-09　温度 47 常温&#10;A 股中位 -0.18%　18/23 涨跌'/><circle cx='167.6' cy='119.2' r='11' fill='transparent' data-tip='2026-09-10　温度 38 偏冷&#10;A 股中位 -1.05%　11/29 涨跌'/><circle cx='167.6' cy='119.2' r='4.4' fill='var(--actual)' data-tip='2026-09-10　温度 38 偏冷&#10;A 股中位 -1.05%　11/29 涨跌'/><circle cx='185.0' cy='114.3' r='11' fill='transparent' data-tip='2026-09-11　温度 41 偏冷&#10;A 股中位 -0.87%　12/29 涨跌'/><circle cx='185.0' cy='114.3' r='4.4' fill='var(--actual)' data-tip='2026-09-11　温度 41 偏冷&#10;A 股中位 -0.87%　12/29 涨跌'/><circle cx='202.3' cy='125.3' r='11' fill='transparent' data-tip='2026-09-14　温度 34 偏冷&#10;A 股中位 -1.64%　10/30 涨跌&#10;10 日波动 1.31%（平静）'/><circle cx='202.3' cy='125.3' r='4.4' fill='var(--actual)' data-tip='2026-09-14　温度 34 偏冷&#10;A 股中位 -1.64%　10/30 涨跌&#10;10 日波动 1.31%（平静）'/><circle cx='219.7' cy='97.9' r='11' fill='transparent' data-tip='2026-09-15　温度 51 常温&#10;A 股中位 +0.16%　23/18 涨跌&#10;10 日波动 1.25%（平静）'/><circle cx='219.7' cy='97.9' r='4.4' fill='var(--actual)' data-tip='2026-09-15　温度 51 常温&#10;A 股中位 +0.16%　23/18 涨跌&#10;10 日波动 1.25%（平静）'/><circle cx='237.1' cy='69.1' r='11' fill='transparent' data-tip='2026-09-16　温度 68 升温&#10;A 股中位 +2.52%　30/11 涨跌&#10;10 日波动 1.53%（常态）'/><circle cx='237.1' cy='69.1' r='4.4' fill='var(--actual)' data-tip='2026-09-16　温度 68 升温&#10;A 股中位 +2.52%　30/11 涨跌&#10;10 日波动 1.53%（常态）'/><circle cx='254.4' cy='108.2' r='11' fill='transparent' data-tip='2026-09-17　温度 44 偏冷&#10;A 股中位 -0.49%　16/25 涨跌&#10;10 日波动 1.53%（常态）'/><circle cx='254.4' cy='108.2' r='4.4' fill='var(--actual)' data-tip='2026-09-17　温度 44 偏冷&#10;A 股中位 -0.49%　16/25 涨跌&#10;10 日波动 1.53%（常态）'/><circle cx='271.8' cy='69.3' r='11' fill='transparent' data-tip='2026-09-18　温度 68 升温&#10;A 股中位 +2.09%　32/9 涨跌&#10;10 日波动 1.54%（常态）'/><circle cx='271.8' cy='69.3' r='4.4' fill='var(--actual)' data-tip='2026-09-18　温度 68 升温&#10;A 股中位 +2.09%　32/9 涨跌&#10;10 日波动 1.54%（常态）'/><circle cx='289.2' cy='89.7' r='11' fill='transparent' data-tip='2026-09-21　温度 56 常温&#10;A 股中位 +0.63%　24/16 涨跌&#10;10 日波动 1.35%（平静）'/><circle cx='289.2' cy='89.7' r='4.4' fill='var(--actual)' data-tip='2026-09-21　温度 56 常温&#10;A 股中位 +0.63%　24/16 涨跌&#10;10 日波动 1.35%（平静）'/><circle cx='306.6' cy='99.6' r='11' fill='transparent' data-tip='2026-09-22　温度 50 常温&#10;A 股中位 -0.07%　19/22 涨跌&#10;10 日波动 1.26%（平静）'/><circle cx='306.6' cy='99.6' r='4.4' fill='var(--actual)' data-tip='2026-09-22　温度 50 常温&#10;A 股中位 -0.07%　19/22 涨跌&#10;10 日波动 1.26%（平静）'/><circle cx='323.9' cy='110.9' r='11' fill='transparent' data-tip='2026-09-23　温度 43 偏冷&#10;A 股中位 -0.45%　13/28 涨跌&#10;10 日波动 1.27%（平静）'/><circle cx='323.9' cy='110.9' r='4.4' fill='var(--actual)' data-tip='2026-09-23　温度 43 偏冷&#10;A 股中位 -0.45%　13/28 涨跌&#10;10 日波动 1.27%（平静）'/><circle cx='341.3' cy='140.5' r='11' fill='transparent' data-tip='2026-09-24　温度 24 冰点&#10;A 股中位 -2.88%　5/36 涨跌&#10;10 日波动 1.52%（常态）'/><circle cx='341.3' cy='140.5' r='4.4' fill='var(--actual)' data-tip='2026-09-24　温度 24 冰点&#10;A 股中位 -2.88%　5/36 涨跌&#10;10 日波动 1.52%（常态）'/><circle cx='358.7' cy='152.6' r='11' fill='transparent' data-tip='2026-09-28　温度 17 冰点&#10;A 股中位 -4.35%　2/39 涨跌&#10;10 日波动 1.99%（常态）'/><circle cx='358.7' cy='152.6' r='4.4' fill='var(--actual)' data-tip='2026-09-28　温度 17 冰点&#10;A 股中位 -4.35%　2/39 涨跌&#10;10 日波动 1.99%（常态）'/><circle cx='376.0' cy='96.2' r='11' fill='transparent' data-tip='2026-09-29　温度 52 常温&#10;A 股中位 +0.41%　24/17 涨跌&#10;10 日波动 1.96%（常态）'/><circle cx='376.0' cy='96.2' r='4.4' fill='var(--actual)' data-tip='2026-09-29　温度 52 常温&#10;A 股中位 +0.41%　24/17 涨跌&#10;10 日波动 1.96%（常态）'/><circle cx='393.4' cy='128.5' r='11' fill='transparent' data-tip='2026-09-30　温度 32 偏冷&#10;A 股中位 -1.91%　10/31 涨跌&#10;10 日波动 2.01%（常态）'/><circle cx='393.4' cy='128.5' r='4.4' fill='var(--actual)' data-tip='2026-09-30　温度 32 偏冷&#10;A 股中位 -1.91%　10/31 涨跌&#10;10 日波动 2.01%（常态）'/><circle cx='410.8' cy='139.9' r='11' fill='transparent' data-tip='2026-10-08　温度 25 冰点&#10;A 股中位 -2.78%　4/37 涨跌&#10;10 日波动 1.85%（常态）'/><circle cx='410.8' cy='139.9' r='4.4' fill='var(--actual)' data-tip='2026-10-08　温度 25 冰点&#10;A 股中位 -2.78%　4/37 涨跌&#10;10 日波动 1.85%（常态）'/><circle cx='428.1' cy='114.1' r='11' fill='transparent' data-tip='2026-10-09　温度 41 偏冷&#10;A 股中位 -1.05%　14/27 涨跌&#10;10 日波动 1.85%（常态）'/><circle cx='428.1' cy='114.1' r='4.4' fill='var(--actual)' data-tip='2026-10-09　温度 41 偏冷&#10;A 股中位 -1.05%　14/27 涨跌&#10;10 日波动 1.85%（常态）'/><circle cx='445.5' cy='133.7' r='11' fill='transparent' data-tip='2026-10-12　温度 29 偏冷&#10;A 股中位 -2.37%　8/33 涨跌&#10;10 日波动 1.55%（常态）'/><circle cx='445.5' cy='133.7' r='4.4' fill='var(--actual)' data-tip='2026-10-12　温度 29 偏冷&#10;A 股中位 -2.37%　8/33 涨跌&#10;10 日波动 1.55%（常态）'/><circle cx='462.9' cy='105.0' r='11' fill='transparent' data-tip='2026-10-13　温度 46 常温&#10;A 股中位 -0.24%　18/23 涨跌&#10;10 日波动 1.45%（平静）'/><circle cx='462.9' cy='105.0' r='4.4' fill='var(--actual)' data-tip='2026-10-13　温度 46 常温&#10;A 股中位 -0.24%　18/23 涨跌&#10;10 日波动 1.45%（平静）'/><circle cx='480.3' cy='144.6' r='11' fill='transparent' data-tip='2026-10-14　温度 22 冰点&#10;A 股中位 -2.92%　2/39 涨跌&#10;10 日波动 1.41%（平静）'/><circle cx='480.3' cy='144.6' r='4.4' fill='var(--actual)' data-tip='2026-10-14　温度 22 冰点&#10;A 股中位 -2.92%　2/39 涨跌&#10;10 日波动 1.41%（平静）'/><circle cx='497.6' cy='143.8' r='11' fill='transparent' data-tip='2026-10-15　温度 22 冰点&#10;A 股中位 -3.89%　11/30 涨跌&#10;10 日波动 1.45%（平静）'/><circle cx='497.6' cy='143.8' r='4.4' fill='var(--actual)' data-tip='2026-10-15　温度 22 冰点&#10;A 股中位 -3.89%　11/30 涨跌&#10;10 日波动 1.45%（平静）'/><circle cx='515.0' cy='96.6' r='11' fill='transparent' data-tip='2026-10-16　温度 51 常温&#10;A 股中位 +0.29%　23/18 涨跌&#10;10 日波动 1.60%（常态）'/><circle cx='515.0' cy='96.6' r='4.4' fill='var(--actual)' data-tip='2026-10-16　温度 51 常温&#10;A 股中位 +0.29%　23/18 涨跌&#10;10 日波动 1.60%（常态）'/><circle cx='532.4' cy='99.9' r='11' fill='transparent' data-tip='2026-10-19　温度 49 常温&#10;A 股中位 +0.21%　21/20 涨跌&#10;10 日波动 1.48%（平静）'/><circle cx='532.4' cy='99.9' r='4.4' fill='var(--actual)' data-tip='2026-10-19　温度 49 常温&#10;A 股中位 +0.21%　21/20 涨跌&#10;10 日波动 1.48%（平静）'/><circle cx='549.7' cy='97.1' r='11' fill='transparent' data-tip='2026-10-20　温度 51 常温&#10;A 股中位 +0.28%　23/17 涨跌&#10;10 日波动 1.46%（平静）'/><circle cx='549.7' cy='97.1' r='4.4' fill='var(--actual)' data-tip='2026-10-20　温度 51 常温&#10;A 股中位 +0.28%　23/17 涨跌&#10;10 日波动 1.46%（平静）'/><circle cx='567.1' cy='107.0' r='11' fill='transparent' data-tip='2026-10-21　温度 45 常温&#10;A 股中位 -0.21%　17/24 涨跌&#10;10 日波动 1.49%（平静）'/><circle cx='567.1' cy='107.0' r='4.4' fill='var(--actual)' data-tip='2026-10-21　温度 45 常温&#10;A 股中位 -0.21%　17/24 涨跌&#10;10 日波动 1.49%（平静）'/><circle cx='584.5' cy='148.3' r='11' fill='transparent' data-tip='2026-10-22　温度 20 冰点&#10;A 股中位 -3.56%　3/38 涨跌&#10;10 日波动 1.59%（常态）'/><circle cx='584.5' cy='148.3' r='4.4' fill='var(--actual)' data-tip='2026-10-22　温度 20 冰点&#10;A 股中位 -3.56%　3/38 涨跌&#10;10 日波动 1.59%（常态）'/><circle cx='601.9' cy='57.6' r='11' fill='transparent' data-tip='2026-10-23　温度 76 升温&#10;A 股中位 +2.78%　38/3 涨跌&#10;10 日波动 2.02%（常态）'/><circle cx='601.9' cy='57.6' r='4.4' fill='var(--actual)' data-tip='2026-10-23　温度 76 升温&#10;A 股中位 +2.78%　38/3 涨跌&#10;10 日波动 2.02%（常态）'/><circle cx='619.2' cy='135.9' r='11' fill='transparent' data-tip='2026-10-26　温度 27 偏冷&#10;A 股中位 -2.88%　9/32 涨跌&#10;10 日波动 2.06%（常态）'/><circle cx='619.2' cy='135.9' r='4.4' fill='var(--actual)' data-tip='2026-10-26　温度 27 偏冷&#10;A 股中位 -2.88%　9/32 涨跌&#10;10 日波动 2.06%（常态）'/><circle cx='636.6' cy='140.7' r='11' fill='transparent' data-tip='2026-10-27　温度 24 冰点&#10;A 股中位 -2.78%　4/37 涨跌&#10;10 日波动 2.10%（常态）'/><circle cx='636.6' cy='140.7' r='4.4' fill='var(--actual)' data-tip='2026-10-27　温度 24 冰点&#10;A 股中位 -2.78%　4/37 涨跌&#10;10 日波动 2.10%（常态）'/><circle cx='654.0' cy='53.7' r='11' fill='transparent' data-tip='2026-10-28　温度 78 升温&#10;A 股中位 +3.62%　37/3 涨跌&#10;10 日波动 2.47%（常态）'/><circle cx='654.0' cy='53.7' r='4.4' fill='var(--actual)' data-tip='2026-10-28　温度 78 升温&#10;A 股中位 +3.62%　37/3 涨跌&#10;10 日波动 2.47%（常态）'/><circle cx='671.3' cy='152.7' r='11' fill='transparent' data-tip='2026-10-29　温度 17 冰点&#10;A 股中位 -4.53%　2/39 涨跌&#10;10 日波动 2.56%（常态）'/><circle cx='671.3' cy='152.7' r='4.4' fill='var(--actual)' data-tip='2026-10-29　温度 17 冰点&#10;A 股中位 -4.53%　2/39 涨跌&#10;10 日波动 2.56%（常态）'/><circle cx='688.7' cy='147.9' r='11' fill='transparent' data-tip='2026-10-30　温度 20 冰点&#10;A 股中位 -4.76%　6/35 涨跌&#10;10 日波动 2.81%（常态）'/><circle cx='688.7' cy='147.9' r='4.4' fill='var(--actual)' data-tip='2026-10-30　温度 20 冰点&#10;A 股中位 -4.76%　6/35 涨跌&#10;10 日波动 2.81%（常态）'/><circle cx='706.1' cy='81.1' r='11' fill='transparent' data-tip='2026-11-02　温度 61 常温&#10;A 股中位 +1.60%　25/15 涨跌&#10;10 日波动 2.91%（常态）'/><circle cx='706.1' cy='81.1' r='4.4' fill='var(--actual)' data-tip='2026-11-02　温度 61 常温&#10;A 股中位 +1.60%　25/15 涨跌&#10;10 日波动 2.91%（常态）'/><circle cx='723.4' cy='144.5' r='11' fill='transparent' data-tip='2026-11-03　温度 22 冰点&#10;A 股中位 -4.98%　9/32 涨跌&#10;10 日波动 3.09%（剧烈）'/><circle cx='723.4' cy='144.5' r='4.4' fill='var(--actual)' data-tip='2026-11-03　温度 22 冰点&#10;A 股中位 -4.98%　9/32 涨跌&#10;10 日波动 3.09%（剧烈）'/><circle cx='740.8' cy='44.0' r='11' fill='transparent' data-tip='2026-11-04　温度 84 过热&#10;A 股中位 +9.49%　40/1 涨跌&#10;10 日波动 4.54%（剧烈）'/><circle cx='740.8' cy='44.0' r='4.4' fill='var(--actual)' data-tip='2026-11-04　温度 84 过热&#10;A 股中位 +9.49%　40/1 涨跌&#10;10 日波动 4.54%（剧烈）'/><circle cx='758.2' cy='79.7' r='11' fill='transparent' data-tip='2026-11-05　温度 62 常温&#10;A 股中位 +1.27%　26/15 涨跌&#10;10 日波动 4.46%（剧烈）'/><circle cx='758.2' cy='79.7' r='4.4' fill='var(--actual)' data-tip='2026-11-05　温度 62 常温&#10;A 股中位 +1.27%　26/15 涨跌&#10;10 日波动 4.46%（剧烈）'/><circle cx='775.6' cy='147.9' r='11' fill='transparent' data-tip='2026-11-06　温度 20 冰点&#10;A 股中位 -3.88%　5/35 涨跌&#10;10 日波动 4.48%（剧烈）'/><circle cx='775.6' cy='147.9' r='4.4' fill='var(--actual)' data-tip='2026-11-06　温度 20 冰点&#10;A 股中位 -3.88%　5/35 涨跌&#10;10 日波动 4.48%（剧烈）'/><circle cx='792.9' cy='95.7' r='11' fill='transparent' data-tip='2026-11-09　温度 52 常温&#10;A 股中位 +0.27%　24/17 涨跌&#10;10 日波动 4.43%（剧烈）'/><circle cx='792.9' cy='95.7' r='4.4' fill='var(--actual)' data-tip='2026-11-09　温度 52 常温&#10;A 股中位 +0.27%　24/17 涨跌&#10;10 日波动 4.43%（剧烈）'/><circle cx='810.3' cy='82.4' r='11' fill='transparent' data-tip='2026-11-10　温度 60 常温&#10;A 股中位 +1.15%　30/11 涨跌&#10;10 日波动 4.38%（剧烈）'/><circle cx='810.3' cy='82.4' r='4.4' fill='var(--actual)' data-tip='2026-11-10　温度 60 常温&#10;A 股中位 +1.15%　30/11 涨跌&#10;10 日波动 4.38%（剧烈）'/><circle cx='827.7' cy='68.3' r='11' fill='transparent' data-tip='2026-11-11　温度 69 升温&#10;A 股中位 +2.58%　30/11 涨跌&#10;10 日波动 4.30%（剧烈）'/><circle cx='827.7' cy='68.3' r='4.4' fill='var(--actual)' data-tip='2026-11-11　温度 69 升温&#10;A 股中位 +2.58%　30/11 涨跌&#10;10 日波动 4.30%（剧烈）'/><circle cx='845.0' cy='112.2' r='11' fill='transparent' data-tip='2026-11-12　温度 42 偏冷&#10;A 股中位 -0.98%　14/26 涨跌&#10;10 日波动 4.07%（剧烈）'/><circle cx='845.0' cy='112.2' r='4.4' fill='var(--actual)' data-tip='2026-11-12　温度 42 偏冷&#10;A 股中位 -0.98%　14/26 涨跌&#10;10 日波动 4.07%（剧烈）'/><circle cx='862.4' cy='133.7' r='11' fill='transparent' data-tip='2026-11-13　温度 29 偏冷&#10;A 股中位 -2.69%　9/32 涨跌&#10;10 日波动 3.86%（剧烈）'/><circle cx='862.4' cy='133.7' r='4.4' fill='var(--actual)' data-tip='2026-11-13　温度 29 偏冷&#10;A 股中位 -2.69%　9/32 涨跌&#10;10 日波动 3.86%（剧烈）'/><circle cx='879.8' cy='151.1' r='11' fill='transparent' data-tip='2026-11-16　温度 18 冰点&#10;A 股中位 -5.16%　4/37 涨跌&#10;10 日波动 4.17%（剧烈）'/><circle cx='879.8' cy='151.1' r='4.4' fill='var(--actual)' data-tip='2026-11-16　温度 18 冰点&#10;A 股中位 -5.16%　4/37 涨跌&#10;10 日波动 4.17%（剧烈）'/><circle cx='897.1' cy='111.3' r='11' fill='transparent' data-tip='2026-11-17　温度 42 偏冷&#10;A 股中位 -0.88%　18/23 涨跌&#10;10 日波动 3.88%（剧烈）'/><circle cx='897.1' cy='111.3' r='4.4' fill='var(--actual)' data-tip='2026-11-17　温度 42 偏冷&#10;A 股中位 -0.88%　18/23 涨跌&#10;10 日波动 3.88%（剧烈）'/><circle cx='914.5' cy='78.5' r='11' fill='transparent' data-tip='2026-11-18　温度 63 升温&#10;A 股中位 +1.89%　28/13 涨跌&#10;10 日波动 2.44%（常态）'/><circle cx='914.5' cy='78.5' r='4.4' fill='var(--actual)' data-tip='2026-11-18　温度 63 升温&#10;A 股中位 +1.89%　28/13 涨跌&#10;10 日波动 2.44%（常态）'/><circle cx='931.9' cy='104.9' r='11' fill='transparent' data-tip='2026-11-19　温度 46 常温&#10;A 股中位 -0.14%　19/22 涨跌&#10;10 日波动 2.37%（常态）'/><circle cx='931.9' cy='104.9' r='4.4' fill='var(--actual)' data-tip='2026-11-19　温度 46 常温&#10;A 股中位 -0.14%　19/22 涨跌&#10;10 日波动 2.37%（常态）'/><circle cx='949.3' cy='150.6' r='11' fill='transparent' data-tip='2026-11-20　温度 18 冰点&#10;A 股中位 -3.72%　2/39 涨跌&#10;10 日波动 2.35%（常态）'/><circle cx='949.3' cy='150.6' r='4.4' fill='var(--actual)' data-tip='2026-11-20　温度 18 冰点&#10;A 股中位 -3.72%　2/39 涨跌&#10;10 日波动 2.35%（常态）'/><circle cx='966.6' cy='63.8' r='11' fill='transparent' data-tip='2026-11-23　温度 72 升温&#10;A 股中位 +2.95%　32/9 涨跌&#10;10 日波动 2.59%（常态）'/><circle cx='966.6' cy='63.8' r='4.4' fill='var(--actual)' data-tip='2026-11-23　温度 72 升温&#10;A 股中位 +2.95%　32/9 涨跌&#10;10 日波动 2.59%（常态）'/><circle cx='984.0' cy='87.0' r='11' fill='transparent' data-tip='2026-11-24　温度 57 常温&#10;A 股中位 +0.96%　25/16 涨跌&#10;10 日波动 2.58%（常态）'/><circle class='pk' cx='984.0' cy='87.0' r='4.4' fill='var(--actual)' data-tip='2026-11-24　温度 57 常温&#10;A 股中位 +0.96%　25/16 涨跌&#10;10 日波动 2.58%（常态）'/><text x='46' y='198.0' fill='var(--muted)' font-size='13.6' font-family='ui-monospace'>10 日波动率 %</text><line x1='46' y1='206' x2='984' y2='206' stroke='var(--line)'/><rect x='46' y='212.0' width='938.0' height='31.2' fill='var(--up)' opacity='.08'/><line x1='46' y1='266.6' x2='984' y2='266.6' stroke='color-mix(in oklch, var(--up) 20%, transparent)' stroke-dasharray='3 4'/><text x='38' y='270.6' fill='var(--muted)' font-size='13.6' text-anchor='end' font-family='ui-monospace'>1.5</text><line x1='46' y1='243.2' x2='984' y2='243.2' stroke='color-mix(in oklch, var(--down) 20%, transparent)' stroke-dasharray='3 4'/><text x='38' y='247.2' fill='var(--muted)' font-size='13.6' text-anchor='end' font-family='ui-monospace'>3</text><polygon points='202.3,290 202.3,269.6 219.7,270.4 237.1,266.1 254.4,266.1 271.8,266.0 289.2,269.0 306.6,270.4 323.9,270.2 341.3,266.2 358.7,259.0 376.0,259.4 393.4,258.6 410.8,261.1 428.1,261.2 445.5,265.8 462.9,267.3 480.3,268.0 497.6,267.5 515.0,265.0 532.4,267.0 549.7,267.2 567.1,266.7 584.5,265.2 601.9,258.5 619.2,257.9 636.6,257.2 654.0,251.4 671.3,250.0 688.7,246.2 706.1,244.7 723.4,241.8 740.8,219.1 758.2,220.4 775.6,220.2 792.9,220.9 810.3,221.7 827.7,222.9 845.0,226.5 862.4,229.8 879.8,225.0 897.1,229.5 914.5,251.9 931.9,253.0 949.3,253.4 966.6,249.6 984.0,249.7 984.0,290' fill='var(--series-3)' fill-opacity='.16'/><polyline points='202.3,269.6 219.7,270.4 237.1,266.1 254.4,266.1 271.8,266.0 289.2,269.0 306.6,270.4 323.9,270.2 341.3,266.2 358.7,259.0 376.0,259.4 393.4,258.6 410.8,261.1 428.1,261.2 445.5,265.8 462.9,267.3 480.3,268.0 497.6,267.5 515.0,265.0 532.4,267.0 549.7,267.2 567.1,266.7 584.5,265.2 601.9,258.5 619.2,257.9 636.6,257.2 654.0,251.4 671.3,250.0 688.7,246.2 706.1,244.7 723.4,241.8 740.8,219.1 758.2,220.4 775.6,220.2 792.9,220.9 810.3,221.7 827.7,222.9 845.0,226.5 862.4,229.8 879.8,225.0 897.1,229.5 914.5,251.9 931.9,253.0 949.3,253.4 966.6,249.6 984.0,249.7' fill='none' stroke='var(--series-3)' stroke-width='1.6' stroke-linejoin='round'/><circle cx='202.3' cy='269.6' r='11' fill='transparent' data-tip='2026-09-14　10 日波动 1.31%（平静）&#10;窗口 10 个交易日　A 股中位 -1.64%'/><circle cx='202.3' cy='269.6' r='3.4' fill='var(--series-3)' data-tip='2026-09-14　10 日波动 1.31%（平静）&#10;窗口 10 个交易日　A 股中位 -1.64%'/><circle cx='219.7' cy='270.4' r='11' fill='transparent' data-tip='2026-09-15　10 日波动 1.25%（平静）&#10;窗口 10 个交易日　A 股中位 +0.16%'/><circle cx='219.7' cy='270.4' r='3.4' fill='var(--series-3)' data-tip='2026-09-15　10 日波动 1.25%（平静）&#10;窗口 10 个交易日　A 股中位 +0.16%'/><circle cx='237.1' cy='266.1' r='11' fill='transparent' data-tip='2026-09-16　10 日波动 1.53%（常态）&#10;窗口 10 个交易日　A 股中位 +2.52%'/><circle cx='237.1' cy='266.1' r='3.4' fill='var(--series-3)' data-tip='2026-09-16　10 日波动 1.53%（常态）&#10;窗口 10 个交易日　A 股中位 +2.52%'/><circle cx='254.4' cy='266.1' r='11' fill='transparent' data-tip='2026-09-17　10 日波动 1.53%（常态）&#10;窗口 10 个交易日　A 股中位 -0.49%'/><circle cx='254.4' cy='266.1' r='3.4' fill='var(--series-3)' data-tip='2026-09-17　10 日波动 1.53%（常态）&#10;窗口 10 个交易日　A 股中位 -0.49%'/><circle cx='271.8' cy='266.0' r='11' fill='transparent' data-tip='2026-09-18　10 日波动 1.54%（常态）&#10;窗口 10 个交易日　A 股中位 +2.09%'/><circle cx='271.8' cy='266.0' r='3.4' fill='var(--series-3)' data-tip='2026-09-18　10 日波动 1.54%（常态）&#10;窗口 10 个交易日　A 股中位 +2.09%'/><circle cx='289.2' cy='269.0' r='11' fill='transparent' data-tip='2026-09-21　10 日波动 1.35%（平静）&#10;窗口 10 个交易日　A 股中位 +0.63%'/><circle cx='289.2' cy='269.0' r='3.4' fill='var(--series-3)' data-tip='2026-09-21　10 日波动 1.35%（平静）&#10;窗口 10 个交易日　A 股中位 +0.63%'/><circle cx='306.6' cy='270.4' r='11' fill='transparent' data-tip='2026-09-22　10 日波动 1.26%（平静）&#10;窗口 10 个交易日　A 股中位 -0.07%'/><circle cx='306.6' cy='270.4' r='3.4' fill='var(--series-3)' data-tip='2026-09-22　10 日波动 1.26%（平静）&#10;窗口 10 个交易日　A 股中位 -0.07%'/><circle cx='323.9' cy='270.2' r='11' fill='transparent' data-tip='2026-09-23　10 日波动 1.27%（平静）&#10;窗口 10 个交易日　A 股中位 -0.45%'/><circle cx='323.9' cy='270.2' r='3.4' fill='var(--series-3)' data-tip='2026-09-23　10 日波动 1.27%（平静）&#10;窗口 10 个交易日　A 股中位 -0.45%'/><circle cx='341.3' cy='266.2' r='11' fill='transparent' data-tip='2026-09-24　10 日波动 1.52%（常态）&#10;窗口 10 个交易日　A 股中位 -2.88%'/><circle cx='341.3' cy='266.2' r='3.4' fill='var(--series-3)' data-tip='2026-09-24　10 日波动 1.52%（常态）&#10;窗口 10 个交易日　A 股中位 -2.88%'/><circle cx='358.7' cy='259.0' r='11' fill='transparent' data-tip='2026-09-28　10 日波动 1.99%（常态）&#10;窗口 10 个交易日　A 股中位 -4.35%'/><circle cx='358.7' cy='259.0' r='3.4' fill='var(--series-3)' data-tip='2026-09-28　10 日波动 1.99%（常态）&#10;窗口 10 个交易日　A 股中位 -4.35%'/><circle cx='376.0' cy='259.4' r='11' fill='transparent' data-tip='2026-09-29　10 日波动 1.96%（常态）&#10;窗口 10 个交易日　A 股中位 +0.41%'/><circle cx='376.0' cy='259.4' r='3.4' fill='var(--series-3)' data-tip='2026-09-29　10 日波动 1.96%（常态）&#10;窗口 10 个交易日　A 股中位 +0.41%'/><circle cx='393.4' cy='258.6' r='11' fill='transparent' data-tip='2026-09-30　10 日波动 2.01%（常态）&#10;窗口 10 个交易日　A 股中位 -1.91%'/><circle cx='393.4' cy='258.6' r='3.4' fill='var(--series-3)' data-tip='2026-09-30　10 日波动 2.01%（常态）&#10;窗口 10 个交易日　A 股中位 -1.91%'/><circle cx='410.8' cy='261.1' r='11' fill='transparent' data-tip='2026-10-08　10 日波动 1.85%（常态）&#10;窗口 10 个交易日　A 股中位 -2.78%'/><circle cx='410.8' cy='261.1' r='3.4' fill='var(--series-3)' data-tip='2026-10-08　10 日波动 1.85%（常态）&#10;窗口 10 个交易日　A 股中位 -2.78%'/><circle cx='428.1' cy='261.2' r='11' fill='transparent' data-tip='2026-10-09　10 日波动 1.85%（常态）&#10;窗口 10 个交易日　A 股中位 -1.05%'/><circle cx='428.1' cy='261.2' r='3.4' fill='var(--series-3)' data-tip='2026-10-09　10 日波动 1.85%（常态）&#10;窗口 10 个交易日　A 股中位 -1.05%'/><circle cx='445.5' cy='265.8' r='11' fill='transparent' data-tip='2026-10-12　10 日波动 1.55%（常态）&#10;窗口 10 个交易日　A 股中位 -2.37%'/><circle cx='445.5' cy='265.8' r='3.4' fill='var(--series-3)' data-tip='2026-10-12　10 日波动 1.55%（常态）&#10;窗口 10 个交易日　A 股中位 -2.37%'/><circle cx='462.9' cy='267.3' r='11' fill='transparent' data-tip='2026-10-13　10 日波动 1.45%（平静）&#10;窗口 10 个交易日　A 股中位 -0.24%'/><circle cx='462.9' cy='267.3' r='3.4' fill='var(--series-3)' data-tip='2026-10-13　10 日波动 1.45%（平静）&#10;窗口 10 个交易日　A 股中位 -0.24%'/><circle cx='480.3' cy='268.0' r='11' fill='transparent' data-tip='2026-10-14　10 日波动 1.41%（平静）&#10;窗口 10 个交易日　A 股中位 -2.92%'/><circle cx='480.3' cy='268.0' r='3.4' fill='var(--series-3)' data-tip='2026-10-14　10 日波动 1.41%（平静）&#10;窗口 10 个交易日　A 股中位 -2.92%'/><circle cx='497.6' cy='267.5' r='11' fill='transparent' data-tip='2026-10-15　10 日波动 1.45%（平静）&#10;窗口 10 个交易日　A 股中位 -3.89%'/><circle cx='497.6' cy='267.5' r='3.4' fill='var(--series-3)' data-tip='2026-10-15　10 日波动 1.45%（平静）&#10;窗口 10 个交易日　A 股中位 -3.89%'/><circle cx='515.0' cy='265.0' r='11' fill='transparent' data-tip='2026-10-16　10 日波动 1.60%（常态）&#10;窗口 10 个交易日　A 股中位 +0.29%'/><circle cx='515.0' cy='265.0' r='3.4' fill='var(--series-3)' data-tip='2026-10-16　10 日波动 1.60%（常态）&#10;窗口 10 个交易日　A 股中位 +0.29%'/><circle cx='532.4' cy='267.0' r='11' fill='transparent' data-tip='2026-10-19　10 日波动 1.48%（平静）&#10;窗口 10 个交易日　A 股中位 +0.21%'/><circle cx='532.4' cy='267.0' r='3.4' fill='var(--series-3)' data-tip='2026-10-19　10 日波动 1.48%（平静）&#10;窗口 10 个交易日　A 股中位 +0.21%'/><circle cx='549.7' cy='267.2' r='11' fill='transparent' data-tip='2026-10-20　10 日波动 1.46%（平静）&#10;窗口 10 个交易日　A 股中位 +0.28%'/><circle cx='549.7' cy='267.2' r='3.4' fill='var(--series-3)' data-tip='2026-10-20　10 日波动 1.46%（平静）&#10;窗口 10 个交易日　A 股中位 +0.28%'/><circle cx='567.1' cy='266.7' r='11' fill='transparent' data-tip='2026-10-21　10 日波动 1.49%（平静）&#10;窗口 10 个交易日　A 股中位 -0.21%'/><circle cx='567.1' cy='266.7' r='3.4' fill='var(--series-3)' data-tip='2026-10-21　10 日波动 1.49%（平静）&#10;窗口 10 个交易日　A 股中位 -0.21%'/><circle cx='584.5' cy='265.2' r='11' fill='transparent' data-tip='2026-10-22　10 日波动 1.59%（常态）&#10;窗口 10 个交易日　A 股中位 -3.56%'/><circle cx='584.5' cy='265.2' r='3.4' fill='var(--series-3)' data-tip='2026-10-22　10 日波动 1.59%（常态）&#10;窗口 10 个交易日　A 股中位 -3.56%'/><circle cx='601.9' cy='258.5' r='11' fill='transparent' data-tip='2026-10-23　10 日波动 2.02%（常态）&#10;窗口 10 个交易日　A 股中位 +2.78%'/><circle cx='601.9' cy='258.5' r='3.4' fill='var(--series-3)' data-tip='2026-10-23　10 日波动 2.02%（常态）&#10;窗口 10 个交易日　A 股中位 +2.78%'/><circle cx='619.2' cy='257.9' r='11' fill='transparent' data-tip='2026-10-26　10 日波动 2.06%（常态）&#10;窗口 10 个交易日　A 股中位 -2.88%'/><circle cx='619.2' cy='257.9' r='3.4' fill='var(--series-3)' data-tip='2026-10-26　10 日波动 2.06%（常态）&#10;窗口 10 个交易日　A 股中位 -2.88%'/><circle cx='636.6' cy='257.2' r='11' fill='transparent' data-tip='2026-10-27　10 日波动 2.10%（常态）&#10;窗口 10 个交易日　A 股中位 -2.78%'/><circle cx='636.6' cy='257.2' r='3.4' fill='var(--series-3)' data-tip='2026-10-27　10 日波动 2.10%（常态）&#10;窗口 10 个交易日　A 股中位 -2.78%'/><circle cx='654.0' cy='251.4' r='11' fill='transparent' data-tip='2026-10-28　10 日波动 2.47%（常态）&#10;窗口 10 个交易日　A 股中位 +3.62%'/><circle cx='654.0' cy='251.4' r='3.4' fill='var(--series-3)' data-tip='2026-10-28　10 日波动 2.47%（常态）&#10;窗口 10 个交易日　A 股中位 +3.62%'/><circle cx='671.3' cy='250.0' r='11' fill='transparent' data-tip='2026-10-29　10 日波动 2.56%（常态）&#10;窗口 10 个交易日　A 股中位 -4.53%'/><circle cx='671.3' cy='250.0' r='3.4' fill='var(--series-3)' data-tip='2026-10-29　10 日波动 2.56%（常态）&#10;窗口 10 个交易日　A 股中位 -4.53%'/><circle cx='688.7' cy='246.2' r='11' fill='transparent' data-tip='2026-10-30　10 日波动 2.81%（常态）&#10;窗口 10 个交易日　A 股中位 -4.76%'/><circle cx='688.7' cy='246.2' r='3.4' fill='var(--series-3)' data-tip='2026-10-30　10 日波动 2.81%（常态）&#10;窗口 10 个交易日　A 股中位 -4.76%'/><circle cx='706.1' cy='244.7' r='11' fill='transparent' data-tip='2026-11-02　10 日波动 2.91%（常态）&#10;窗口 10 个交易日　A 股中位 +1.60%'/><circle cx='706.1' cy='244.7' r='3.4' fill='var(--series-3)' data-tip='2026-11-02　10 日波动 2.91%（常态）&#10;窗口 10 个交易日　A 股中位 +1.60%'/><circle cx='723.4' cy='241.8' r='11' fill='transparent' data-tip='2026-11-03　10 日波动 3.09%（剧烈）&#10;窗口 10 个交易日　A 股中位 -4.98%'/><circle cx='723.4' cy='241.8' r='3.4' fill='var(--series-3)' data-tip='2026-11-03　10 日波动 3.09%（剧烈）&#10;窗口 10 个交易日　A 股中位 -4.98%'/><circle cx='740.8' cy='219.1' r='11' fill='transparent' data-tip='2026-11-04　10 日波动 4.54%（剧烈）&#10;窗口 10 个交易日　A 股中位 +9.49%'/><circle cx='740.8' cy='219.1' r='3.4' fill='var(--series-3)' data-tip='2026-11-04　10 日波动 4.54%（剧烈）&#10;窗口 10 个交易日　A 股中位 +9.49%'/><circle cx='758.2' cy='220.4' r='11' fill='transparent' data-tip='2026-11-05　10 日波动 4.46%（剧烈）&#10;窗口 10 个交易日　A 股中位 +1.27%'/><circle cx='758.2' cy='220.4' r='3.4' fill='var(--series-3)' data-tip='2026-11-05　10 日波动 4.46%（剧烈）&#10;窗口 10 个交易日　A 股中位 +1.27%'/><circle cx='775.6' cy='220.2' r='11' fill='transparent' data-tip='2026-11-06　10 日波动 4.48%（剧烈）&#10;窗口 10 个交易日　A 股中位 -3.88%'/><circle cx='775.6' cy='220.2' r='3.4' fill='var(--series-3)' data-tip='2026-11-06　10 日波动 4.48%（剧烈）&#10;窗口 10 个交易日　A 股中位 -3.88%'/><circle cx='792.9' cy='220.9' r='11' fill='transparent' data-tip='2026-11-09　10 日波动 4.43%（剧烈）&#10;窗口 10 个交易日　A 股中位 +0.27%'/><circle cx='792.9' cy='220.9' r='3.4' fill='var(--series-3)' data-tip='2026-11-09　10 日波动 4.43%（剧烈）&#10;窗口 10 个交易日　A 股中位 +0.27%'/><circle cx='810.3' cy='221.7' r='11' fill='transparent' data-tip='2026-11-10　10 日波动 4.38%（剧烈）&#10;窗口 10 个交易日　A 股中位 +1.15%'/><circle cx='810.3' cy='221.7' r='3.4' fill='var(--series-3)' data-tip='2026-11-10　10 日波动 4.38%（剧烈）&#10;窗口 10 个交易日　A 股中位 +1.15%'/><circle cx='827.7' cy='222.9' r='11' fill='transparent' data-tip='2026-11-11　10 日波动 4.30%（剧烈）&#10;窗口 10 个交易日　A 股中位 +2.58%'/><circle cx='827.7' cy='222.9' r='3.4' fill='var(--series-3)' data-tip='2026-11-11　10 日波动 4.30%（剧烈）&#10;窗口 10 个交易日　A 股中位 +2.58%'/><circle cx='845.0' cy='226.5' r='11' fill='transparent' data-tip='2026-11-12　10 日波动 4.07%（剧烈）&#10;窗口 10 个交易日　A 股中位 -0.98%'/><circle cx='845.0' cy='226.5' r='3.4' fill='var(--series-3)' data-tip='2026-11-12　10 日波动 4.07%（剧烈）&#10;窗口 10 个交易日　A 股中位 -0.98%'/><circle cx='862.4' cy='229.8' r='11' fill='transparent' data-tip='2026-11-13　10 日波动 3.86%（剧烈）&#10;窗口 10 个交易日　A 股中位 -2.69%'/><circle cx='862.4' cy='229.8' r='3.4' fill='var(--series-3)' data-tip='2026-11-13　10 日波动 3.86%（剧烈）&#10;窗口 10 个交易日　A 股中位 -2.69%'/><circle cx='879.8' cy='225.0' r='11' fill='transparent' data-tip='2026-11-16　10 日波动 4.17%（剧烈）&#10;窗口 10 个交易日　A 股中位 -5.16%'/><circle cx='879.8' cy='225.0' r='3.4' fill='var(--series-3)' data-tip='2026-11-16　10 日波动 4.17%（剧烈）&#10;窗口 10 个交易日　A 股中位 -5.16%'/><circle cx='897.1' cy='229.5' r='11' fill='transparent' data-tip='2026-11-17　10 日波动 3.88%（剧烈）&#10;窗口 10 个交易日　A 股中位 -0.88%'/><circle cx='897.1' cy='229.5' r='3.4' fill='var(--series-3)' data-tip='2026-11-17　10 日波动 3.88%（剧烈）&#10;窗口 10 个交易日　A 股中位 -0.88%'/><circle cx='914.5' cy='251.9' r='11' fill='transparent' data-tip='2026-11-18　10 日波动 2.44%（常态）&#10;窗口 10 个交易日　A 股中位 +1.89%'/><circle cx='914.5' cy='251.9' r='3.4' fill='var(--series-3)' data-tip='2026-11-18　10 日波动 2.44%（常态）&#10;窗口 10 个交易日　A 股中位 +1.89%'/><circle cx='931.9' cy='253.0' r='11' fill='transparent' data-tip='2026-11-19　10 日波动 2.37%（常态）&#10;窗口 10 个交易日　A 股中位 -0.14%'/><circle cx='931.9' cy='253.0' r='3.4' fill='var(--series-3)' data-tip='2026-11-19　10 日波动 2.37%（常态）&#10;窗口 10 个交易日　A 股中位 -0.14%'/><circle cx='949.3' cy='253.4' r='11' fill='transparent' data-tip='2026-11-20　10 日波动 2.35%（常态）&#10;窗口 10 个交易日　A 股中位 -3.72%'/><circle cx='949.3' cy='253.4' r='3.4' fill='var(--series-3)' data-tip='2026-11-20　10 日波动 2.35%（常态）&#10;窗口 10 个交易日　A 股中位 -3.72%'/><circle cx='966.6' cy='249.6' r='11' fill='transparent' data-tip='2026-11-23　10 日波动 2.59%（常态）&#10;窗口 10 个交易日　A 股中位 +2.95%'/><circle cx='966.6' cy='249.6' r='3.4' fill='var(--series-3)' data-tip='2026-11-23　10 日波动 2.59%（常态）&#10;窗口 10 个交易日　A 股中位 +2.95%'/><circle cx='984.0' cy='249.7' r='11' fill='transparent' data-tip='2026-11-24　10 日波动 2.58%（常态）&#10;窗口 10 个交易日　A 股中位 +0.96%'/><circle class='pk' cx='984.0' cy='249.7' r='3.4' fill='var(--series-3)' data-tip='2026-11-24　10 日波动 2.58%（常态）&#10;窗口 10 个交易日　A 股中位 +0.96%'/><text x='38' y='294.0' fill='var(--muted)' font-size='13.6' text-anchor='end' font-family='ui-monospace'>0</text><text x='38' y='216.0' fill='var(--muted)' font-size='13.6' text-anchor='end' font-family='ui-monospace'>5</text><text x='46.0' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/01'</text><text x='150.2' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/09'</text><text x='254.4' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/17'</text><text x='358.7' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>09/28'</text><text x='462.9' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/13'</text><text x='567.1' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/21'</text><text x='671.3' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>10/29'</text><text x='775.6' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>11/06'</text><text x='879.8' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>11/16'</text><text x='974.0' y='308' fill='var(--muted)' font-size='13.6' text-anchor='middle' font-family='ui-monospace'>11/24'</text></svg></div>
 <p class="note">上 = 温度分（0–100），三条虚线是刻度 25 / 62 / 80；点每一期，悬停可看当天的中位涨跌、涨跌家数和温度。
 下方副图 = <b>10 日波动率</b>：41 家 A 股<b>中位日涨跌</b>的 10 个交易日滚动标准差（百分点，不年化，需满 10 期才有值）。两条虚线 1.5% / 3% 是经验档位：低于前者算平静，高于后者算剧烈（淡红底）。最新一期 <b>2.58%</b>（常态），历史中位 2.02%、最高 4.54%，排 <b>15 / 46</b>（1 = 最剧烈）。越往右越新。</p>
 </section>
 
 <section class="hsec">
 <h2>最近五期<a href="archive.html">全部 55 期</a></h2>
-<ul class="recent"><li><a href='20261124.html'><span class='d'>11-24</span><span class='m'>常温<small style='color:#d29922'>57</small><small><span style='color:#f85149'>+0.96%</span></small></span><span class='v' style='color:#f85149'>+0.82pt</span><span class='arw'>→</span></a></li><li><a href='20261123.html'><span class='d'>11-23</span><span class='m'>升温<small style='color:#f85149'>72</small><small><span style='color:#f85149'>+2.95%</span></small></span><span class='v' style='color:#f85149'>+2.86pt</span><span class='arw'>→</span></a></li><li><a href='20261120.html'><span class='d'>11-20</span><span class='m'>冰点<small style='color:#3fb950'>18</small><small><span style='color:#3fb950'>-3.72%</span></small></span><span class='v' style='color:#3fb950'>-2.96pt</span><span class='arw'>→</span></a></li><li><a href='20261119.html'><span class='d'>11-19</span><span class='m'>常温<small style='color:#d29922'>46</small><small><span style='color:#3fb950'>-0.14%</span></small></span><span class='v' style='color:#3fb950'>-0.17pt</span><span class='arw'>→</span></a></li><li><a href='20261118.html'><span class='d'>11-18</span><span class='m'>升温<small style='color:#f85149'>63</small><small><span style='color:#f85149'>+1.89%</span></small></span><span class='v' style='color:#f85149'>+1.71pt</span><span class='arw'>→</span></a></li></ul>
+<ul class="recent"><li><a href='20261124.html'><span class='d'>11-24</span><span class='m'>常温<small style='color:var(--guide)'>57</small><small><span style='color:var(--up)'>+0.96%</span></small></span><span class='v' style='color:var(--up)'>+0.82pt</span><span class='arw'>→</span></a></li><li><a href='20261123.html'><span class='d'>11-23</span><span class='m'>升温<small style='color:var(--up)'>72</small><small><span style='color:var(--up)'>+2.95%</span></small></span><span class='v' style='color:var(--up)'>+2.86pt</span><span class='arw'>→</span></a></li><li><a href='20261120.html'><span class='d'>11-20</span><span class='m'>冰点<small style='color:var(--down)'>18</small><small><span style='color:var(--down)'>-3.72%</span></small></span><span class='v' style='color:var(--down)'>-2.96pt</span><span class='arw'>→</span></a></li><li><a href='20261119.html'><span class='d'>11-19</span><span class='m'>常温<small style='color:var(--guide)'>46</small><small><span style='color:var(--down)'>-0.14%</span></small></span><span class='v' style='color:var(--down)'>-0.17pt</span><span class='arw'>→</span></a></li><li><a href='20261118.html'><span class='d'>11-18</span><span class='m'>升温<small style='color:var(--up)'>63</small><small><span style='color:var(--up)'>+1.89%</span></small></span><span class='v' style='color:var(--up)'>+1.71pt</span><span class='arw'>→</span></a></li></ul>
 </section>
 
-<footer>AI 主题每日复盘 · 首页生成于 2026-11-24 17:10　·　
+<footer>AI 主题每日复盘 · 首页生成于 2026-11-24 19:06　·　
 数据日 2026-11-24（页面生成于 2026-11-24 17:10）　·　
 <a href="archive.html">历史归档</a>　·　<a class="gh" href="https://github.com/Jst-Well-Dan/gs50-dashboard" target="_blank" rel="noopener" title="源码仓库：https://github.com/Jst-Well-Dan/gs50-dashboard" aria-label="GitHub 源码仓库"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></footer>
 </div>
