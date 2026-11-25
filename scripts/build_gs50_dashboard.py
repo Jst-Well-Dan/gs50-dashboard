@@ -110,9 +110,9 @@ SECTOR_CN = {
     "Consumer Hardware": "消费硬件", "Humanoid Robots": "人形机器人", "Cooling": "液冷",
     "Data Center": "数据中心", "Optical Transceivers": "光模块", "PCB/CCL": "PCB/覆铜板",
     "Servers and Support": "服务器", "Data Center Power": "数据中心电源", "Grid Transmission": "电网传输",
-    "Power Generation": "发电", "AI Platform & Software": "芯片IP/平台", "Foundry": "晶圆代工",
+    "Power Generation": "发电", "AI Platform & Software": "AI平台与软件", "Foundry": "晶圆代工",
     "IC Design": "芯片设计", "Materials": "半导体材料", "Memory": "存储", "OSAT": "封测",
-    "SPE": "半导体设备",
+    "SPE": "半导体设备", "Software": "软件",
 }
 
 
